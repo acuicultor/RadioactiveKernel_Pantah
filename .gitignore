@@ -164,3 +164,6 @@ sphinx_*/
 # Build script and changelog generator
 build.sh
 changelog.sh
+
+# Object directory
+out/
