@@ -2007,7 +2007,7 @@ static ssize_t sched_lib_cpu_freq_cached_store(struct file *filp,
 PROC_OPS_RW(sched_lib_cpu_freq_cached);
 
 extern unsigned int sched_lib_freq_cpumask;
-static int sched_lib_freq_show(struct seq_file *m, void *v)
+static int sched_lib_freq_cpumask_show(struct seq_file *m, void *v)
 {
 	seq_printf(m, "%d\n", sched_lib_freq_cpumask);
 	return 0;
