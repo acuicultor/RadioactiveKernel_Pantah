@@ -459,16 +459,16 @@ CC		= clang
 LD		= ld.lld
 AR		= llvm-ar
 NM		= llvm-nm
-OBJCOPY		= llvm-objcopy
+OBJCOPY		= llvm-objcopy -g --strip-debug --strip-unneeded
 OBJDUMP		= llvm-objdump
 READELF		= llvm-readelf
 STRIP		= llvm-strip
 else
-CC		= $(CROSS_COMPILE)gcc
+CC		= $(CROSS_COMPILE)gcc -g0
 LD		= $(CROSS_COMPILE)ld
 AR		= $(CROSS_COMPILE)ar
 NM		= $(CROSS_COMPILE)nm
-OBJCOPY		= $(CROSS_COMPILE)objcopy
+OBJCOPY		= $(CROSS_COMPILE)objcopy -g --strip-debug --strip-unneeded
 OBJDUMP		= $(CROSS_COMPILE)objdump
 READELF		= $(CROSS_COMPILE)readelf
 STRIP		= $(CROSS_COMPILE)strip
@@ -877,7 +877,7 @@ ifdef CONFIG_DEBUG_INFO
 ifdef CONFIG_DEBUG_INFO_SPLIT
 DEBUG_CFLAGS	+= -gsplit-dwarf
 else
-DEBUG_CFLAGS	+= -g
+DEBUG_CFLAGS	+= -g0
 endif
 
 ifdef CONFIG_AS_IS_LLVM
