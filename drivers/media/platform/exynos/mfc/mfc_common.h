@@ -191,6 +191,8 @@
 	((IS_VP8_ENC(ctx) || IS_VP9_ENC(ctx)) && p->ivf_header_disable))
 
 #define HDR10_PLUS_ADDR(base, idx)	((base) + ((idx) * HDR10_PLUS_DATA_SIZE))
+#define MFC_UHD_RES		(3840 * 2160)
+#define IS_UHD_RES(ctx)		(((ctx)->crop_width * (ctx)->crop_height) == MFC_UHD_RES)
 
 /*
  levels with maximum property values
