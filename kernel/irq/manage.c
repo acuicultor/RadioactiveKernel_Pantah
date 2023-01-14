@@ -273,6 +273,10 @@ int irq_do_set_affinity(struct irq_data *data, const struct cpumask *mask,
 		hk_mask = housekeeping_cpumask(HK_FLAG_MANAGED_IRQ);
 
 		cpumask_and(&tmp_mask, mask, hk_mask);
+
+		/* IRQs only run on the first CPU in the affinity mask; reflect that */
+		mask = cpumask_of(cpumask_first(mask));
+
 		if (!cpumask_intersects(&tmp_mask, cpu_online_mask))
 			prog_mask = mask;
 		else
