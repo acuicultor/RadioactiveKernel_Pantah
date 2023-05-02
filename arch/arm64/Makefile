@@ -85,7 +85,7 @@ endif
 # we pass it only to the assembler. This option is utilized only in case of non
 # integrated assemblers.
 ifeq ($(CONFIG_AS_HAS_PAC), y)
-asm-arch := armv8.3-a
+asm-arch := armv8.3-a+crc+crypto+dotprod+lse+rcpc+sve+frinta+dcpop+rand
 endif
 endif
 
@@ -93,12 +93,12 @@ KBUILD_CFLAGS += $(branch-prot-flags-y)
 
 ifeq ($(CONFIG_AS_HAS_ARMV8_4), y)
 # make sure to pass the newest target architecture to -march.
-asm-arch := armv8.4-a
+asm-arch := armv8.4-a+crc+crypto+dotprod+lse+rcpc+sve+frinta+dcpop+rand
 endif
 
 ifeq ($(CONFIG_AS_HAS_ARMV8_5), y)
 # make sure to pass the newest target architecture to -march.
-asm-arch := armv8.5-a
+asm-arch := armv8.5-a+crc+crypto+dotprod+lse+rcpc+sve+frinta+dcpop+rand
 endif
 
 ifdef asm-arch
