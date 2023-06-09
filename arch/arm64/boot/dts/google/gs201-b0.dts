@@ -424,27 +424,27 @@
 					type = "active";
 				};
 				little_control_temp: little-control-temp {
-					temperature = <90000>; /* millicelsius */
+					temperature = <95000>; /* millicelsius */
 					hysteresis = <5000>; /* millicelsius */
 					type = "passive";
 				};
 				little_alert1: little-alert1 {
-					temperature = <92000>; /* millicelsius */
-					hysteresis = <2000>; /* millicelsius */
+					temperature = <99000>; /* millicelsius */
+					hysteresis = <4000>; /* millicelsius */
 					type = "passive";
 				};
 				little_alert2: little-alert2 {
-					temperature = <94000>; /* millicelsius */
-					hysteresis = <2000>; /* millicelsius */
+					temperature = <100000>; /* millicelsius */
+					hysteresis = <5000>; /* millicelsius */
 					type = "active";
 				};
 				little_alert5: little-alert5 {
-					temperature = <96000>; /* millicelsius */
-					hysteresis = <2000>; /* millicelsius */
+					temperature = <103000>; /* millicelsius */
+					hysteresis = <5000>; /* millicelsius */
 					type = "active";
 				};
 				little_alert6: little-alert6 {
-					temperature = <100000>; /* millicelsius */
+					temperature = <110000>; /* millicelsius */
 					hysteresis = <5000>; /* millicelsius */
 					type = "active";
 				};
