@@ -223,9 +223,13 @@ static int vh_sched_init(void)
 		rvh_cpu_cgroup_online_pixel_mod, NULL);
 	if (ret)
 		return ret;
-		
+
 	ret = register_trace_android_rvh_sched_newidle_balance(
 		sched_newidle_balance_pixel_mod, NULL);
+	if (ret)
+		return ret;
+
+	ret = register_trace_android_rvh_sched_fork(rvh_sched_fork_pixel_mod, NULL);
 	if (ret)
 		return ret;
 
