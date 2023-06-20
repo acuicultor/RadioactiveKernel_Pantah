@@ -88,10 +88,6 @@ extern void rvh_enqueue_task_fair_pixel_mod(void *data, struct rq *rq, struct ta
 extern void rvh_dequeue_task_fair_pixel_mod(void *data, struct rq *rq, struct task_struct *p,
 					    int flags);
 #endif
-
-void sched_newidle_balance_pixel_mod(void *data, struct rq *this_rq, struct rq_flags *rf,
-		int *pulled_task, int *done);
-
 extern struct cpufreq_governor sched_pixel_gov;
 
 extern int pmu_poll_init(void);
@@ -223,12 +219,7 @@ static int vh_sched_init(void)
 		rvh_cpu_cgroup_online_pixel_mod, NULL);
 	if (ret)
 		return ret;
-
-	ret = register_trace_android_rvh_sched_newidle_balance(
-		sched_newidle_balance_pixel_mod, NULL);
-	if (ret)
-		return ret;
-
+		
 	ret = register_trace_android_rvh_sched_fork(rvh_sched_fork_pixel_mod, NULL);
 	if (ret)
 		return ret;
