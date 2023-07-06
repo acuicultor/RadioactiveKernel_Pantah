@@ -200,11 +200,6 @@ static int vh_sched_init(void)
 		return ret;
 #endif
 
-	ret = register_trace_android_rvh_sched_newidle_balance(
-		sched_newidle_balance_pixel_mod, NULL);
-	if (ret)
-		return ret;
-
 	ret = register_trace_android_rvh_post_init_entity_util_avg(
 		rvh_post_init_entity_util_avg_pixel_mod, NULL);
 	if (ret)
