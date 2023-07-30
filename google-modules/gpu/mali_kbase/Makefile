@@ -261,6 +261,7 @@ CFLAGS_MODULE += -Wall -Werror
 
 # The following were added to align with W=1 in scripts/Makefile.extrawarn
 # from the Linux source tree (v5.18.14)
+ifdef MALI_ENABLE_EXTRAWARN
 CFLAGS_MODULE += -Wextra -Wunused -Wno-unused-parameter
 CFLAGS_MODULE += -Wmissing-declarations
 CFLAGS_MODULE += -Wmissing-format-attribute
@@ -278,8 +279,10 @@ CFLAGS_MODULE += -Wno-sign-compare
 CFLAGS_MODULE += -Wno-shift-negative-value
 # This flag is needed to avoid build errors on older kernels
 CFLAGS_MODULE += $(call cc-option, -Wno-cast-function-type)
+endif
 
 KBUILD_CPPFLAGS += -DKBUILD_EXTRA_WARN1
+KBUILD_OPTIONS += $(MAKE_ARGS)
 
 # The following were added to align with W=2 in scripts/Makefile.extrawarn
 # from the Linux source tree (v5.18.14)
