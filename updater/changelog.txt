@@ -1,6 +1,6 @@
-Project name: RadioactiveKernel_Pantah-v1.1.1
+Project name: RadioactiveKernel_Pantah-v1.1.2
   * update build version (acuicultor)
-  * Merge remote-tracking branch 'aosp/android-gs-pantah-5.10-android13-qpr3' into release (acuicultor)
-  * Revert "vh: sched: add sched_newidle_balance" (acuicultor) [27b81b30afa0]
-  * Revert "vh: sched: pull importnant task to fit cpu when new idle" (acuicultor) [0a2a62f10fc8]
-
+  * Merge remote-tracking branch 'aosp/android-gs-pantah-5.10-android13-qpr3' into release (acuicultor) 
+  * fingerprint: goodix_pixel: Add a slimmed down rewritten Goodix FP driver (Jebaitedneko) [eb28f7f4ef5d]
+  * cpufreq: battery saver: camera app exceptions switches (tbalden) [db6e87d5d7eb]
+  * gki: abi update (acuicultor) [76ef70f57b77]
