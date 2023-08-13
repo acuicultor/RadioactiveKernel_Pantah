@@ -208,15 +208,9 @@ bool mali_kbase_supports_cap(unsigned long api_version, enum mali_kbase_cap cap)
 
 static void kbase_set_sched_rt(struct kbase_device *kbdev, struct task_struct *task, char *thread_name)
 {
-	unsigned int i;
 	static const struct sched_param param = {
 		.sched_priority = KBASE_RT_THREAD_PRIO,
 	};
-
-	cpumask_t mask = { CPU_BITS_NONE };
-	for (i = KBASE_RT_THREAD_CPUMASK_MIN; i <= KBASE_RT_THREAD_CPUMASK_MAX ; i++)
-		cpumask_set_cpu(i, &mask);
-	kthread_bind_mask(task, &mask);
 
 	wake_up_process(task);
 
