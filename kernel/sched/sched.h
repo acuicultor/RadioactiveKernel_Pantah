@@ -161,6 +161,8 @@ extern void call_trace_sched_update_nr_running(struct rq *rq, int count);
  */
 #define RUNTIME_INF		((u64)~0ULL)
 
+extern unsigned int sysctl_sched_latency;
+
 static inline int idle_policy(int policy)
 {
 	return policy == SCHED_IDLE;
