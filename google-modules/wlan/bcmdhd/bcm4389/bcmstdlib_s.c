@@ -192,47 +192,6 @@ exit:
 }
 #endif /* !__STDC_WANT_SECURE_LIB__ && !(__STDC_LIB_EXT1__ && __STDC_WANT_LIB_EXT1__) */
 
-#if !defined(FREEBSD) && !defined(MACOSX) && !defined(BCM_USE_PLATFORM_STRLCPY)
-/**
- * strlcpy - Copy a %NUL terminated string into a sized buffer
- * @dest: Where to copy the string to
- * @src: Where to copy the string from
- * @size: size of destination buffer 0 if input parameters are NOK
- * return: string leng of src (which is always < size) on success or size on failure
- *
- * Compatible with *BSD: the result is always a valid
- * NUL-terminated string that fits in the buffer (unless,
- * of course, the buffer size is zero). It does not pad
- * out the result like strncpy() does.
- */
-size_t BCMPOSTTRAPFN(strlcpy)(char *dest, const char *src, size_t size)
-{
-	size_t i;
-
-	if (dest == NULL || size == 0) {
-		return 0;
-	}
-
-	if (src == NULL) {
-		*dest = '\0';
-		return 0;
-	}
-
-	for (i = 0; i < size; i++) {
-		dest[i] = src[i];
-		if (dest[i] == '\0') {
-			/* success - src string copied */
-			return i;
-		}
-	}
-
-	/* NULL terminate since not found in src */
-	dest[size - 1u] = '\0';
-
-	/* fail - src string truncated */
-	return size;
-}
-#endif /* !defined(FREEBSD) && !defined(MACOSX) && !defined(BCM_USE_PLATFORM_STRLCPY) */
 
 /**
  * strlcat_s - Concatenate a %NUL terminated string with a sized buffer
