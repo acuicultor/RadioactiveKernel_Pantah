@@ -4801,8 +4801,6 @@ static int sec_ts_probe(struct spi_device *client)
 		}
 	}
 
-	cpu_latency_qos_add_request(&ts->pm_qos_req, PM_QOS_DEFAULT_VALUE);
-
 	ts->ignore_charger_nb = 0;
 	/* init motion filter mode */
 	ts->use_default_mf = 0;
@@ -4817,6 +4815,10 @@ static int sec_ts_probe(struct spi_device *client)
 
 	input_info(true, &ts->client->dev, "%s: request_irq = %d\n", __func__,
 			client->irq);
+			
+    ts->pm_qos_req.type = PM_QOS_REQ_AFFINE_IRQ;
+	ts->pm_qos_req.irq = client->irq;
+	cpu_latency_qos_add_request(&ts->pm_qos_req, PM_QOS_DEFAULT_VALUE);
 
 	ret = request_threaded_irq(client->irq, sec_ts_isr, sec_ts_irq_thread,
 			ts->plat_data->irq_type, SEC_TS_NAME, ts);
