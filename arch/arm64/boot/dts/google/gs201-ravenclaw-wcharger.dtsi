@@ -41,6 +41,9 @@
 };
 
 &hsi2c_15 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+
 	p9412@3c {
 		compatible = "idt,p9412";
 		reg = <0x3c>;
