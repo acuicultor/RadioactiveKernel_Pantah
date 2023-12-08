@@ -463,13 +463,13 @@ static inline bool get_prefer_idle(struct task_struct *p)
 	struct vendor_task_struct *vp = get_vendor_task_struct(p);
 	struct vendor_binder_task_struct *vbinder = get_vendor_binder_task_struct(p);
 
-	if (vendor_sched_reduce_prefer_idle && !vp->uclamp_fork_reset)
-		return (vg[vp->group].prefer_idle && p->prio <= DEFAULT_PRIO &&
-			uclamp_eff_value_pixel_mod(p, UCLAMP_MAX) == SCHED_CAPACITY_SCALE) ||
-			vp->prefer_idle || vbinder->prefer_idle;
+	if (get_uclamp_fork_reset(p, true) || vp->prefer_idle || vbinder->prefer_idle)
+		return true;
+	else if (vendor_sched_reduce_prefer_idle)
+		return vg[vp->group].prefer_idle && p->prio <= DEFAULT_PRIO &&
+			uclamp_eff_value_pixel_mod(p, UCLAMP_MAX) == SCHED_CAPACITY_SCALE;
 	else
-		return vg[vp->group].prefer_idle || vp->prefer_idle || vbinder->prefer_idle ||
-		       vp->uclamp_fork_reset;
+		return vg[vp->group].prefer_idle;
 }
 
 static inline void init_vendor_task_struct(struct vendor_task_struct *v_tsk)
@@ -529,6 +529,9 @@ static inline bool uclamp_can_ignore_uclamp_min(struct rq *rq,
 		return false;
 
 	if (task_on_rq_migrating(p))
+		return false;
+
+	if (get_uclamp_fork_reset(p, true))
 		return false;
 
 	if (rt_task(p))
@@ -601,6 +604,9 @@ static inline bool uclamp_can_ignore_uclamp_max(struct rq *rq,
 		return false;
 
 	if (task_on_rq_migrating(p))
+		return false;
+
+	if (get_uclamp_fork_reset(p, true))
 		return false;
 
 	/*
@@ -693,10 +699,11 @@ static inline bool uclamp_is_ignore_uclamp_max(struct task_struct *p)
 static inline bool apply_uclamp_filters(struct rq *rq, struct task_struct *p)
 {
 	bool auto_uclamp_max = get_vendor_task_struct(p)->auto_uclamp_max_flags;
-	bool filtered = false;
+	unsigned long rq_uclamp_min = rq->uclamp[UCLAMP_MIN].value;
+	unsigned long rq_uclamp_max = rq->uclamp[UCLAMP_MAX].value;
+	bool force_cpufreq_update;
 
 	if (auto_uclamp_max) {
-		filtered = true;
 		/* GKI has incremented it already, undo that */
 		uclamp_rq_dec_id(rq, p, UCLAMP_MAX);
 		/* update uclamp_max if set to auto */
@@ -717,14 +724,44 @@ static inline bool apply_uclamp_filters(struct rq *rq, struct task_struct *p)
 		 * auto value
 		 */
 		uclamp_rq_inc_id(rq, p, UCLAMP_MAX);
+
+		/* Reset clamp idle holding when there is one RUNNABLE task */
+		if (rq->uclamp_flags & UCLAMP_FLAG_IDLE)
+			rq->uclamp_flags &= ~UCLAMP_FLAG_IDLE;
 	}
 
 	if (uclamp_can_ignore_uclamp_min(rq, p)) {
-		filtered = true;
 		uclamp_set_ignore_uclamp_min(p);
 		/* GKI has incremented it already, undo that */
 		uclamp_rq_dec_id(rq, p, UCLAMP_MIN);
 	}
 
-	return filtered;
+	/*
+	 * Force cpufreq update if we filtered and the new rq eff value is
+	 * smaller than it was at func entry.
+	 */
+	force_cpufreq_update = rq_uclamp_min > rq->uclamp[UCLAMP_MIN].value;
+	force_cpufreq_update |= rq_uclamp_max > rq->uclamp[UCLAMP_MAX].value;
+
+	return force_cpufreq_update;
+}
+
+static inline void inc_adpf_counter(struct task_struct *p, atomic_t *num_adpf_tasks)
+{
+	if (rt_task(p))
+		return;
+
+	atomic_inc(num_adpf_tasks);
+	/*
+	 * Tell the scheduler that this tasks really wants to run next
+	 */
+	set_next_buddy(&p->se);
+}
+
+static inline void dec_adpf_counter(struct task_struct *p, atomic_t *num_adpf_tasks)
+{
+	if (rt_task(p))
+		return;
+
+	atomic_dec(num_adpf_tasks);
 }
