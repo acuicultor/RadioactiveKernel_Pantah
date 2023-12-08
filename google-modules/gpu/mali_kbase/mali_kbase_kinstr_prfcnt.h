@@ -26,7 +26,7 @@
 #ifndef _KBASE_KINSTR_PRFCNT_H_
 #define _KBASE_KINSTR_PRFCNT_H_
 
-#include "mali_kbase_hwcnt_types.h"
+#include "hwcnt/mali_kbase_hwcnt_types.h"
 #include <uapi/gpu/arm/midgard/mali_kbase_hwcnt_reader.h>
 
 struct kbase_kinstr_prfcnt_context;
@@ -80,7 +80,6 @@ void kbase_kinstr_prfcnt_suspend(struct kbase_kinstr_prfcnt_context *kinstr_ctx)
  */
 void kbase_kinstr_prfcnt_resume(struct kbase_kinstr_prfcnt_context *kinstr_ctx);
 
-#if MALI_KERNEL_TEST_API
 /**
  * kbasep_kinstr_prfcnt_get_block_info_list() - Get list of all block types
  *                                              with their information.
@@ -93,7 +92,7 @@ void kbase_kinstr_prfcnt_resume(struct kbase_kinstr_prfcnt_context *kinstr_ctx);
  *
  * Return: 0 on success, else error code.
  */
-int kbasep_kinstr_prfcnt_get_block_info_list(const struct kbase_hwcnt_metadata *metadata,
+static int kbasep_kinstr_prfcnt_get_block_info_list(const struct kbase_hwcnt_metadata *metadata,
 					     size_t block_set, struct prfcnt_enum_item *item_arr,
 					     size_t *arr_idx);
 
@@ -105,7 +104,7 @@ int kbasep_kinstr_prfcnt_get_block_info_list(const struct kbase_hwcnt_metadata *
  *
  * Return: Number of metadata items for available blocks in each sample.
  */
-size_t kbasep_kinstr_prfcnt_get_sample_md_count(const struct kbase_hwcnt_metadata *metadata,
+ static size_t kbasep_kinstr_prfcnt_get_sample_md_count(const struct kbase_hwcnt_metadata *metadata,
 						struct kbase_hwcnt_enable_map *enable_map);
 
 /**
@@ -121,7 +120,7 @@ size_t kbasep_kinstr_prfcnt_get_sample_md_count(const struct kbase_hwcnt_metadat
  *
  * Return: 0 on success, else error code.
  */
-int kbasep_kinstr_prfcnt_set_block_meta_items(struct kbase_hwcnt_enable_map *enable_map,
+static int kbasep_kinstr_prfcnt_set_block_meta_items(struct kbase_hwcnt_enable_map *enable_map,
 					      struct kbase_hwcnt_dump_buffer *dst,
 					      struct prfcnt_metadata **block_meta_base,
 					      u8 *base_addr, u8 counter_set);
@@ -138,7 +137,7 @@ int kbasep_kinstr_prfcnt_set_block_meta_items(struct kbase_hwcnt_enable_map *ena
  *
  * Return: 0 on success, else error code.
  */
-int kbasep_kinstr_prfcnt_client_create(struct kbase_kinstr_prfcnt_context *kinstr_ctx,
+static int kbasep_kinstr_prfcnt_client_create(struct kbase_kinstr_prfcnt_context *kinstr_ctx,
 				       union kbase_ioctl_kinstr_prfcnt_setup *setup,
 				       struct kbase_kinstr_prfcnt_client **out_vcli,
 				       struct prfcnt_request_item *req_arr);
@@ -150,7 +149,7 @@ int kbasep_kinstr_prfcnt_client_create(struct kbase_kinstr_prfcnt_context *kinst
  *
  * Return: 0 on success, else error code.
  */
-int kbasep_kinstr_prfcnt_cmd(struct kbase_kinstr_prfcnt_client *cli,
+static int kbasep_kinstr_prfcnt_cmd(struct kbase_kinstr_prfcnt_client *cli,
 			     struct prfcnt_control_cmd *control_cmd);
 
 /**
@@ -158,7 +157,6 @@ int kbasep_kinstr_prfcnt_cmd(struct kbase_kinstr_prfcnt_client *cli,
  * @cli: kinstr_prfcnt client. Must not be attached to a kinstr_prfcnt context.
  */
 void kbasep_kinstr_prfcnt_client_destroy(struct kbase_kinstr_prfcnt_client *cli);
-#endif /* MALI_KERNEL_TEST_API */
 
 /**
  * kbase_kinstr_prfcnt_enum_info - Enumerate performance counter information.
