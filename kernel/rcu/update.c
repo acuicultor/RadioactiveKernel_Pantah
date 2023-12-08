@@ -43,7 +43,6 @@
 #include <linux/slab.h>
 #include <linux/irq_work.h>
 #include <linux/rcupdate_trace.h>
-#include <linux/jiffies.h>
 
 #define CREATE_TRACE_POINTS
 
@@ -60,10 +59,6 @@ module_param(rcu_normal, int, 0);
 static int rcu_normal_after_boot;
 module_param(rcu_normal_after_boot, int, 0);
 #endif /* #ifndef CONFIG_TINY_RCU */
-
-/* Minimum time in ms until RCU can consider in-kernel boot as completed. */
-static int boot_end_delay = CONFIG_RCU_BOOT_END_DELAY;
-module_param(boot_end_delay, int, 0444);
 
 #ifdef CONFIG_DEBUG_LOCK_ALLOC
 /**
@@ -147,45 +142,8 @@ bool rcu_gp_is_normal(void)
 }
 EXPORT_SYMBOL_GPL(rcu_gp_is_normal);
 
-static atomic_t rcu_async_hurry_nesting = ATOMIC_INIT(1);
-/*
- * Should call_rcu() callbacks be processed with urgency or are
- * they OK being executed with arbitrary delays?
- */
-bool rcu_async_should_hurry(void)
-{
-	return !IS_ENABLED(CONFIG_RCU_LAZY) ||
-	       atomic_read(&rcu_async_hurry_nesting);
-}
-EXPORT_SYMBOL_GPL(rcu_async_should_hurry);
-
-/**
- * rcu_async_hurry - Make future async RCU callbacks not lazy.
- *
- * After a call to this function, future calls to call_rcu()
- * will be processed in a timely fashion.
- */
-void rcu_async_hurry(void)
-{
-	if (IS_ENABLED(CONFIG_RCU_LAZY))
-		atomic_inc(&rcu_async_hurry_nesting);
-}
-EXPORT_SYMBOL_GPL(rcu_async_hurry);
-
-/**
- * rcu_async_relax - Make future async RCU callbacks lazy.
- *
- * After a call to this function, future calls to call_rcu()
- * will be processed in a lazy fashion.
- */
-void rcu_async_relax(void)
-{
-	if (IS_ENABLED(CONFIG_RCU_LAZY))
-		atomic_dec(&rcu_async_hurry_nesting);
-}
-EXPORT_SYMBOL_GPL(rcu_async_relax);
-
 static atomic_t rcu_expedited_nesting = ATOMIC_INIT(1);
+
 /*
  * Should normal grace-period primitives be expedited?  Intended for
  * use within RCU.  Note that this function takes the rcu_expedited
@@ -228,31 +186,13 @@ void rcu_unexpedite_gp(void)
 EXPORT_SYMBOL_GPL(rcu_unexpedite_gp);
 
 static bool rcu_boot_ended __read_mostly;
-/*
- * Inform RCU of the end of the in-kernel boot sequence. The boot sequence will
- * not be marked ended until at least boot_end_delay milliseconds have passed.
- */
-void rcu_end_inkernel_boot(void);
-static void boot_rcu_work_fn(struct work_struct *work)
-{
-	rcu_end_inkernel_boot();
-}
-static DECLARE_DELAYED_WORK(boot_rcu_work, boot_rcu_work_fn);
 
+/*
+ * Inform RCU of the end of the in-kernel boot sequence.
+ */
 void rcu_end_inkernel_boot(void)
 {
-	if (boot_end_delay) {
-		u64 boot_ms = div_u64(ktime_get_boot_fast_ns(), 1000000UL);
-
-		if (boot_ms < boot_end_delay) {
-			schedule_delayed_work(&boot_rcu_work,
-					msecs_to_jiffies(boot_end_delay - boot_ms));
-			return;
-		}
-	}
-
 	rcu_unexpedite_gp();
-	rcu_async_relax();
 	if (rcu_normal_after_boot)
 		WRITE_ONCE(rcu_normal, 1);
 	rcu_boot_ended = true;
