@@ -2841,7 +2841,6 @@ void rvh_enqueue_task_fair_pixel_mod(void *data, struct rq *rq, struct task_stru
 		 * Tell the scheduler that this tasks really wants to run next
 		 */
 		set_next_buddy(&p->se);
-	}
 
 #if IS_ENABLED(CONFIG_USE_VENDOR_GROUP_UTIL)
 	if (likely(sched_feat(UTIL_EST))) {
