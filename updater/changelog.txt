@@ -1,22 +1,36 @@
-Project name: RadioactiveKernel_Pantah-v2.0.6
+Project name: RadioactiveKernel_Pantah-v2.0.8
   * update build version (acuicultor) 
-  * defconfig regenerate (acuicultor) [84773325612c]
-  * ANDROID: teo: Extend ifdef protection for accessing sched_cpu_util (Qais Yousef) [3e2a6b5b64a1]
-  * vh: sched: Reduce overhead of calling uclamp_eff_value() (Qais Yousef) [fd186f3379db]
-  * vh: sched: Inline functions in hot enqueue_task path (Qais Yousef) [0a0601be5cbe]
-  * vh: sched: Reduce overhead of sugov_update_shared (Qais Yousef) [ecec6b96be4c]
-  * vh: sched: Don't call sched_tp unconditionally (Qais Yousef) [2ea78d9588ad]
-  * vh: sched: Always let ADPF task prefer idle (Rick Yiu) [c56c50363cc5]
-  * vh: sched: let binder inherit uclamp_fork_reset flag (Chungkai Mei) [e08e0305c292]
-  * drivers: devfreq: Remove memlat spam logs (Sophia Wang) [d170a2754602]
-  * vh: sched: Reduce overhead of some traces (Rick Yiu) [744bbc7f33b8]
-  * vh: sched: Refine RT task placement (Rick Yiu) [d2d53e42a720]
-  * vh: sched: don't migrate task when cpu just wake up (Chungkai Mei) [10824f4dab1a]
-  * PM / freezer: Reduce freeze timeout to 1 second for Android (Sultan Alsawaf) [109d3edfb8df]
-  * arm64/dts: Increase LITTLE cluster TMU thermal limit (Dyneteve) [2f2e506a43fc]
-  * arch: gs101/gs201: Update TMU configuration (Dyneteve) [9405f3d1a587]
-  * sched/fair: Compile out NUMA code entirely when NUMA is disabled (Sultan Alsawaf) [425809b1571a]
-  * defconfig regenerate (acuicultor) [ed5ab5bafb3b]
-  * Revert "sched/cass: Introduce the Capacity Aware Superset Scheduler" (acuicultor) [873eb8d5eb3c]
-  * defconfig regenerate (acuicultor) [ee061a639ac2]
-  * arm64: Allow LD_DEAD_CODE_DATA_ELIMINATION to be selected (Sultan Alsawaf) [247cee309a72]
+  * kernelsu: remove !CONFIG_KPROBES warning (Juhyung Park) [907cdadb0956]
+  * fs: Add KernelSU calls manually (Pzqqt) [ab5ad1da8fbc]
+  * kernelsu: manually define KSU_GIT_VERSION (Juhyung Park) [22090714dc47]
+  * drivers: import KernelSU (Juhyung Park) [9cf0cb58f69f]
+  * Merge tag 'v0.7.1' of https://github.com/tiann/KernelSU into android14-5.15-lts (Aarqw12) [ee4f555b9f4e]
+  * defconfig regenerate (acuicultor) [55ebfd1f5989]
+  * Treewide: fix compilation after merges (acuicultor) [86259388121b]
+  * Kernel:rcu: squash revert of my lazy rcu implementation (acuicultor) [f491b5ff88ab]
+  * google-modules: merge branch refs/heads/android-gs-pantah-5.10-android14-qpr1 from https://android.googlesource.com/kernel/google-modules/ (acuicultor) [9c98043716ac]
+  * Merge remote-tracking branch 'android-gs-pantah-android14-release/android-gs-pantah-5.10-android14-qpr1' into A14-stable
+  * android-gs-pantah-android14-release/android-gs-pantah-5.10-android14-qpr1: (2833 commits)
+  vh: sched: Use get_uclamp_fork_reset to check prefer idle
+  vh_sched: cpu_freq: Applying rate limite logging
+  arm64/dts: raviole: remove google,bhi-algo-ver
+  acpm: dynamically alloc irq_info to avoid invalid-access
+  arm64/dts: raviole/cloudripper: set bhi-status-marginal/need-rep 79
+  vh: sched: fix imabalanced adpf counter
+  Revert "pcie: Setting XO clock to be always ON."
+  vh: sched: Only force freq update if uclamp_max decreased
+  vh: sched: Ignore vendor group uclamp_max for latency sensitive tasks
+  vh: sched: Don't ignore latency sensitive task in uclamp filters
+  vh: sched: Don't apply_uclamp_filters() to stopper task
+  vh: sched: Fix reset UCLAMP_FLAG_IDLE after uclamp_rq_inc_id()
+  arm64/dts: raviole/cloudripper: set bhi-cycle-grace 200 cycle
+  sched: vh: Add a new knob to modify teo util_threshold
+  usb: typec: usb_psy: Add new sysfs attribute to select sdp alarm timeout
+  vh: sched: Reduce overhead of calling uclamp_eff_value()
+  vh: sched: Inline functions in hot enqueue_task path
+  vh: sched: Reduce overhead of sugov_update_shared
+  vh: sched: Don't call sched_tp unconditionally
+  UPSTREAM: tcpm: Avoid soft reset when partner does not support get_status
+  ...
+
+
