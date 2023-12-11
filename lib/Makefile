@@ -2,6 +2,7 @@
 #
 # Makefile for some libs needed in the kernel.
 #
+subdir-ccflags-y += -mcpu=cortex-a55
 
 ccflags-remove-$(CONFIG_FUNCTION_TRACER) += $(CC_FLAGS_FTRACE)
 

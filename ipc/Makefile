@@ -2,7 +2,7 @@
 #
 # Makefile for the linux ipc.
 #
-
+subdir-ccflags-y += -mcpu=cortex-a78+crypto
 obj-$(CONFIG_SYSVIPC_COMPAT) += compat.o
 obj-$(CONFIG_SYSVIPC) += util.o msgutil.o msg.o sem.o shm.o syscall.o
 obj-$(CONFIG_SYSVIPC_SYSCTL) += ipc_sysctl.o

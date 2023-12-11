@@ -5,7 +5,7 @@
 # 14 Sep 2000, Christoph Hellwig <hch@infradead.org>
 # Rewritten to use lists instead of if-statements.
 # 
-
+subdir-ccflags-y += -mcpu=cortex-x1+crypto
 subdir-ccflags-y += -DANDROID_GKI_VFS_EXPORT_ONLY=VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver
 
 obj-y :=	open.o read_write.o file_table.o super.o \

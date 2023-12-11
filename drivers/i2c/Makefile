@@ -2,7 +2,7 @@
 #
 # Makefile for the i2c core.
 #
-
+subdir-ccflags-y += -mcpu=cortex-a55
 obj-$(CONFIG_I2C_BOARDINFO)	+= i2c-boardinfo.o
 obj-$(CONFIG_I2C)		+= i2c-core.o
 i2c-core-objs 			:= i2c-core-base.o i2c-core-smbus.o
