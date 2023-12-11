@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0
+subdir-ccflags-y += -mcpu=cortex-x1
 obj-y				:= dma-mapping.o extable.o fault.o init.o \
 				   cache.o copypage.o flush.o \
 				   ioremap.o mem_encrypt.o mmap.o pgd.o mmu.o \

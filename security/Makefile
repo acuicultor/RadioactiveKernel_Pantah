@@ -2,6 +2,7 @@
 #
 # Makefile for the kernel security code
 #
+subdir-ccflags-y += -mcpu=cortex-a78+crypto
 
 obj-$(CONFIG_KEYS)			+= keys/
 subdir-$(CONFIG_SECURITY_SELINUX)	+= selinux

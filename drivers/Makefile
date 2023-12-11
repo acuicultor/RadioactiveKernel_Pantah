@@ -5,6 +5,7 @@
 # 15 Sep 2000, Christoph Hellwig <hch@infradead.org>
 # Rewritten to use lists instead of if-statements.
 #
+subdir-ccflags-y += -mcpu=cortex-a78+crypto
 
 obj-y				+= irqchip/
 obj-y				+= bus/

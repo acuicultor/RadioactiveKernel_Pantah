@@ -5,6 +5,7 @@
 # 2 Sep 2000, Christoph Hellwig <hch@infradead.org>
 # Rewritten to use lists instead of if-statements.
 #
+subdir-ccflags-y += -mcpu=cortex-a78+crypto
 
 obj-$(CONFIG_NET)		:= devres.o socket.o core/
 

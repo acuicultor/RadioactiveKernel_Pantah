@@ -2,6 +2,7 @@
 #
 # Makefile for the linux memory manager.
 #
+subdir-ccflags-y += -mcpu=cortex-x1+crypto
 
 KASAN_SANITIZE_slab_common.o := n
 KASAN_SANITIZE_slab.o := n
