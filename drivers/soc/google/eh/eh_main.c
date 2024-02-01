@@ -713,8 +713,12 @@ static int eh_comp_thread(void *data)
 	struct eh_device *eh_dev = data;
 	DEFINE_WAIT(wait);
 	int nr_processed = 0;
+	struct sched_attr attr = {
+		.sched_policy = SCHED_NORMAL,
+		.sched_nice = -10,
+	};
 
-	sched_set_fifo_low(current);
+	WARN_ON_ONCE(sched_setattr_nocheck(current, &attr) != 0);
 	current->flags |= PF_MEMALLOC;
 
 	while (!kthread_should_stop()) {
