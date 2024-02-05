@@ -693,7 +693,6 @@ static inline bool apply_uclamp_filters(struct rq *rq, struct task_struct *p)
 	unsigned long rq_uclamp_min = rq->uclamp[UCLAMP_MIN].value;
 	unsigned long rq_uclamp_max = rq->uclamp[UCLAMP_MAX].value;
 	bool force_cpufreq_update;
-    bool filtered = false;
 
 	if (auto_uclamp_max) {
 		/* GKI has incremented it already, undo that */
