@@ -245,8 +245,8 @@ EXTRA_CFLAGS := $(foreach config,$(CONFIGS), \
                         -D$(value config)=1))
 
 ifeq ($(MALI_KCONFIG_EXT_PREFIX),)
-    EXTRA_CFLAGS += -DCONFIG_MALI_PLATFORM_NAME='\"$(CONFIG_MALI_PLATFORM_NAME)\"'
-    EXTRA_CFLAGS += -DCONFIG_MALI_NO_MALI_DEFAULT_GPU='\"$(CONFIG_MALI_NO_MALI_DEFAULT_GPU)\"'
+    EXTRA_CFLAGS += -DCONFIG_MALI_PLATFORM_NAME='"$(CONFIG_MALI_PLATFORM_NAME)"'
+    EXTRA_CFLAGS += -DCONFIG_MALI_NO_MALI_DEFAULT_GPU='"$(CONFIG_MALI_NO_MALI_DEFAULT_GPU)"'
 endif
 
 #
@@ -258,6 +258,7 @@ EXTRA_SYMBOLS += \
     $(BASE_SYMBOLS)
 
 CFLAGS_MODULE += -Wall -Werror
+CFLAGS_MODULE += $(call cc-option, -Wno-format-security)
 
 # The following were added to align with W=1 in scripts/Makefile.extrawarn
 # from the Linux source tree (v5.18.14)
