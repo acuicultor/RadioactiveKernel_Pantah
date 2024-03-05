@@ -7,6 +7,7 @@
 
 /* Mali core includes */
 #include <mali_kbase.h>
+#include <trace/events/power.h>
 
 /* Pixel integration includes */
 #include "mali_kbase_config_platform.h"
@@ -445,6 +446,8 @@ static ssize_t hint_max_freq_store(struct device *dev, struct device_attribute *
 	if (level < 0)
 		return -EINVAL;
 
+	trace_clock_set_rate("gpu_hint_max", clock, raw_smp_processor_id());
+
 	mutex_lock(&pc->dvfs.lock);
 	gpu_dvfs_update_level_lock(kbdev, GPU_DVFS_LEVEL_LOCK_HINT, -1, level);
 	gpu_dvfs_select_level(kbdev);
@@ -488,6 +491,8 @@ static ssize_t hint_min_freq_store(struct device *dev, struct device_attribute *
 	level = get_level_from_clock(kbdev, clock);
 	if (level < 0)
 		return -EINVAL;
+
+	trace_clock_set_rate("gpu_hint_min", clock, raw_smp_processor_id());
 
 	mutex_lock(&pc->dvfs.lock);
 	gpu_dvfs_update_level_lock(kbdev, GPU_DVFS_LEVEL_LOCK_HINT, level, -1);

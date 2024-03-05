@@ -194,7 +194,7 @@ static phys_addr_t mali_pma_get_phys_addr(
 }
 
 /**
- * pma_free_page - Free a page of memory
+ * mali_pma_free_page - Free a page of memory
  *
  * @pma_dev: The protected memory allocator the request is being made
  *           through.

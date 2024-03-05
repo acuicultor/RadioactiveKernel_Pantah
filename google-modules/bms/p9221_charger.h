@@ -964,7 +964,6 @@ enum p9xxx_renego_state {
 #define P9221_MILLIC_TO_DECIC(mc) ((mc) / 100)
 #define P9412_MW_TO_HW(mw) (((mw) * 2) / 1000) /* mw -> 0.5 W units */
 #define P9412_HW_TO_MW(hw) (((hw) / 2) * 1000) /* 0.5 W units -> mw */
-#define get_boot_sec() div_u64(ktime_to_ns(ktime_get_boottime()), NSEC_PER_SEC)
 #define get_boot_msec() div_u64(ktime_to_ns(ktime_get_boottime()), NSEC_PER_MSEC)
 
 #define p9xxx_chip_get_tx_id(chgr, id) (chgr->reg_tx_id_addr < 0 ? \

@@ -223,6 +223,10 @@ int kbase_hwaccess_pm_init(struct kbase_device *kbdev)
 		!kbase_hw_has_issue(kbdev, BASE_HW_ISSUE_TURSEHW_1997) &&
 		kbdev->pm.backend.callback_power_runtime_gpu_active &&
 		kbdev->pm.backend.callback_power_runtime_gpu_idle;
+
+	kbdev->pm.backend.apply_hw_issue_TITANHW_2938_wa =
+		kbase_hw_has_issue(kbdev, BASE_HW_ISSUE_TITANHW_2938) &&
+		kbdev->pm.backend.gpu_sleep_supported;
 #endif
 
 	if (IS_ENABLED(CONFIG_MALI_HW_ERRATA_1485982_NOT_AFFECTED)) {

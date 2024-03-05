@@ -2446,7 +2446,7 @@ static void report_queue_fatal_error(struct kbase_queue *const queue, u32 cs_fat
 }
 
 /**
- * fatal_event_worker - Handle the CS_FATAL/CS_FAULT error for the GPU queue
+ * cs_error_worker - Handle the CS_FATAL/CS_FAULT error for the GPU queue
  *
  * @data: Pointer to a work_struct embedded in GPU command queue.
  *

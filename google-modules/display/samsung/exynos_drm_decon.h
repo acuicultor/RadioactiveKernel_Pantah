@@ -362,7 +362,8 @@ struct dpu_log_bts_cal {
 	u32 rt_avg_bw;
 	u32 read_bw;
 	u32 write_bw;
-	u32 fps;
+	u32 fps; /* bts fps */
+	u32 crtc_fps; /* crtc fps */
 };
 
 struct dpu_log_bts_event {

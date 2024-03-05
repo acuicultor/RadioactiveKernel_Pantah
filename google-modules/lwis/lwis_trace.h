@@ -11,7 +11,6 @@
 
 #undef TRACE_SYSTEM
 #define TRACE_SYSTEM lwis
-#define NOTRACE
 
 #if !defined(_TRACE_LWIS_H_) || defined(TRACE_HEADER_MULTI_READ)
 #define _TRACE_LWIS_H_

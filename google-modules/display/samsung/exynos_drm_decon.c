@@ -87,7 +87,7 @@ static bool decon_check_fs_pending_locked(struct decon_device *decon);
 static inline unsigned long fps_timeout(int fps)
 {
 	/* default to 60 fps, if fps is not provided */
-	const int frame_time_ms = DIV_ROUND_UP(MSEC_PER_SEC, fps ? : 60);
+	const frame_time_ms = DIV_ROUND_UP(MSEC_PER_SEC, fps ? : 60);
 
 	return msecs_to_jiffies(frame_time_ms) + FRAME_TIMEOUT;
 }
@@ -332,7 +332,7 @@ static void decon_update_dsi_config(struct decon_config *config,
 	}
 }
 
-static int decon_get_main_dsim_id(void)
+static int decon_get_main_dsim_id()
 {
 	const struct dsim_device *dsim = exynos_get_dual_dsi(DSIM_DUAL_DSI_MAIN);
 
@@ -910,6 +910,15 @@ static void decon_atomic_flush(struct exynos_drm_crtc *exynos_crtc,
 	decon_debug(decon, "%s -\n", __func__);
 }
 
+static u32 _decon_get_current_fps(struct decon_device *decon)
+{
+	struct drm_crtc *crtc = &decon->crtc->base;
+	const struct drm_crtc_state *crtc_state = crtc->state;
+	u32 min_fps = min_t(u32, decon->bts.fps, drm_mode_vrefresh(&crtc_state->mode));
+
+	return min_fps ? min_fps : 60;
+}
+
 static void decon_print_config_info(struct decon_device *decon)
 {
 	char *str_output = NULL;
@@ -935,10 +944,11 @@ static void decon_print_config_info(struct decon_device *decon)
 	else if  (decon->config.out_type & DECON_OUT_WB)
 		str_output = "WB";
 
-	decon_info(decon, "%s mode. %s %s output.(%dx%d@%dhz)\n",
+	decon_info(decon, "%s mode. %s %s output.(%dx%d@%uhz, bts %uhz)\n",
 			decon->config.mode.op_mode ? "command" : "video",
 			str_trigger, str_output,
 			decon->config.image_width, decon->config.image_height,
+			_decon_get_current_fps(decon),
 			decon->bts.fps);
 }
 
@@ -1328,14 +1338,6 @@ static void decon_disable_irqs(struct decon_device *decon)
 	decon_reg_set_interrupts(decon->id, 0);
 	if (decon_is_te_enabled(decon))
 		disable_irq_nosync(decon->irq_fs);
-}
-
-static u32 _decon_get_current_fps(struct decon_device *decon)
-{
-	struct drm_crtc *crtc = &decon->crtc->base;
-	const struct drm_crtc_state *crtc_state = crtc->state;
-
-	return min_t(u32, decon->bts.fps, drm_mode_vrefresh(&crtc_state->mode)) ?: 60;
 }
 
 static bool _decon_wait_for_framedone(struct decon_device *decon)

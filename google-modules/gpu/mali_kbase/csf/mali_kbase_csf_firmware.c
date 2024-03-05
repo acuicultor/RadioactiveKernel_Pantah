@@ -110,16 +110,13 @@ MODULE_PARM_DESC(fw_debug,
 
 #define TL_METADATA_ENTRY_NAME_OFFSET (0x8)
 
-#define BUILD_INFO_METADATA_SIZE_OFFSET (0x4)
-#define BUILD_INFO_GIT_SHA_LEN (40U)
-#define BUILD_INFO_GIT_DIRTY_LEN (1U)
-#define BUILD_INFO_GIT_SHA_PATTERN "git_sha: "
-
 #define CSF_MAX_FW_STOP_LOOPS            (100000)
 
 #define CSF_GLB_REQ_CFG_MASK                                                                       \
 	(GLB_REQ_CFG_ALLOC_EN_MASK | GLB_REQ_CFG_PROGRESS_TIMER_MASK |                             \
 	 GLB_REQ_CFG_PWROFF_TIMER_MASK | GLB_REQ_IDLE_ENABLE_MASK)
+
+char fw_git_sha[BUILD_INFO_GIT_SHA_LEN];
 
 static inline u32 input_page_read(const u32 *const input, const u32 offset)
 {
@@ -988,6 +985,8 @@ static int parse_build_info_metadata_entry(struct kbase_device *kbdev,
 			i++;
 		}
 		git_sha[i] = '\0';
+
+		memcpy(fw_git_sha, git_sha, BUILD_INFO_GIT_SHA_LEN);
 
 		dev_info(kbdev->dev, "Mali firmware git_sha: %s\n", git_sha);
 	} else
@@ -2425,6 +2424,7 @@ int kbase_csf_firmware_early_init(struct kbase_device *kbdev)
 	INIT_WORK(&kbdev->csf.fw_error_work, firmware_error_worker);
 	INIT_WORK(&kbdev->csf.coredump_work, coredump_worker);
 
+	init_rwsem(&kbdev->csf.pmode_sync_sem);
 	mutex_init(&kbdev->csf.reg_lock);
 	kbase_csf_pending_gpuq_kicks_init(kbdev);
 
@@ -3023,8 +3023,6 @@ void kbase_csf_enter_protected_mode(struct kbase_device *kbdev)
 int kbase_csf_wait_protected_mode_enter(struct kbase_device *kbdev)
 {
 	int err;
-
-	lockdep_assert_held(&kbdev->mmu_hw_mutex);
 
 	err = wait_for_global_request(kbdev, GLB_REQ_PROTM_ENTER_MASK);
 

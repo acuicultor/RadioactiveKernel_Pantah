@@ -78,6 +78,13 @@
 /* MAX_SUPPORTED_STREAMS_PER_GROUP: Maximum CSs per csg. */
 #define MAX_SUPPORTED_STREAMS_PER_GROUP 32
 
+#define BUILD_INFO_METADATA_SIZE_OFFSET (0x4)
+#define BUILD_INFO_GIT_SHA_LEN (40U)
+#define BUILD_INFO_GIT_DIRTY_LEN (1U)
+#define BUILD_INFO_GIT_SHA_PATTERN "git_sha: "
+
+extern char fw_git_sha[BUILD_INFO_GIT_SHA_LEN];
+
 struct kbase_device;
 
 

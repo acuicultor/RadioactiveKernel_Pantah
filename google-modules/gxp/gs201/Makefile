@@ -32,18 +32,7 @@ gxp-objs += \
 		gxp-pm.o \
 		gxp-ssmt.o \
 		gxp-thermal.o \
-		gxp-vd.o \
-		gcip-alloc-helper.o \
-			   gcip-dma-fence.o \
-			   gcip-domain-pool.o \
-			   gcip-firmware.o \
-			   gcip-image-config.o \
-			   gcip-kci.o \
-			   gcip-mailbox.o \
-			   gcip-mem-pool.o \
-			   gcip-pm.o \
-			   gcip-telemetry.o \
-			   gcip-thermal.o
+		gxp-vd.o
 
 ifeq ($(GXP_CHIP),AMALTHEA)
 
@@ -57,7 +46,11 @@ EDGETPU_CHIP := janeiro
 
 endif
 
+ifeq ($(CONFIG_$(GXP_CHIP)),m)
 
+gxp-objs += $(GCIP_DIR)/gcip.o
+
+endif
 
 KERNEL_SRC ?= /lib/modules/$(shell uname -r)/build
 M ?= $(shell pwd)
@@ -94,6 +87,7 @@ KBUILD_OPTIONS += GXP_CHIP=$(GXP_CHIP) GXP_PLATFORM=$(GXP_PLATFORM)
 EXTRA_SYMBOLS += $(GMODULE_PATH)/edgetpu/$(EDGETPU_CHIP)/drivers/edgetpu/Module.symvers
 
 modules modules_install:
+	$(MAKE) -C $(KERNEL_SRC) M=$(M)/$(GCIP_DIR) gcip.o
 	$(MAKE) -C $(KERNEL_SRC) M=$(M) W=1 $(KBUILD_OPTIONS) \
 	EXTRA_CFLAGS="$(EXTRA_CFLAGS)" KBUILD_EXTRA_SYMBOLS="$(EXTRA_SYMBOLS)" $(@)
 clean:

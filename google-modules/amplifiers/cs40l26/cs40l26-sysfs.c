@@ -817,6 +817,45 @@ err_mutex:
 }
 static DEVICE_ATTR_RW(vpbr_thld);
 
+#if IS_ENABLED(CONFIG_GOOG_CUST)
+static ssize_t reset_show(struct device *dev,
+			  struct device_attribute *attr, char *buf)
+{
+	struct cs40l26_private *cs40l26 = dev_get_drvdata(dev);
+
+	dev_info(cs40l26->dev, "Reset: Event: %d; Count: %d; Time: (%lld,%lld).\n",
+		 cs40l26->reset_event, cs40l26->reset_count, cs40l26->reset_time_s,
+		 cs40l26->reset_time_e);
+	return sysfs_emit(buf, "%d\n", cs40l26->reset_event);
+}
+
+static ssize_t reset_store(struct device *dev,
+			   struct device_attribute *attr,
+			   const char *buf, size_t count)
+{
+	struct cs40l26_private *cs40l26 = dev_get_drvdata(dev);
+	int ret;
+	int choice;
+
+	ret = kstrtou32(buf, 10, &choice);
+	if (ret)
+		return ret;
+
+	if (choice == 0) {
+		cs40l26_make_reset_decision(cs40l26, __func__);
+	} else if (choice == 1) {
+		cs40l26->reset_event = CS40L26_RESET_EVENT_NONEED;
+		cs40l26->reset_count = 0;
+		queue_work(cs40l26->vibe_workqueue, &cs40l26->reset_work);
+	} else {
+		return -EINVAL;
+	}
+
+	return count;
+}
+static DEVICE_ATTR_RW(reset);
+#endif
+
 static struct attribute *cs40l26_dev_attrs[] = {
 	&dev_attr_num_waves.attr,
 	&dev_attr_die_temp.attr,
@@ -834,6 +873,9 @@ static struct attribute *cs40l26_dev_attrs[] = {
 	&dev_attr_redc_comp_enable.attr,
 	&dev_attr_swap_firmware.attr,
 	&dev_attr_vpbr_thld.attr,
+#if IS_ENABLED(CONFIG_GOOG_CUST)
+	&dev_attr_reset.attr,
+#endif
 	NULL,
 };
 

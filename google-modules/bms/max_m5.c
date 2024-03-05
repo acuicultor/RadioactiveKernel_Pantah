@@ -419,7 +419,7 @@ int max_m5_reset_state_data(struct max_m5_data *m5_data)
 	if (ret < 0)
 		dev_warn(m5_data->dev, "Erase GMSR fail (%d)\n", ret);
 
-	return ret;
+	return ret == sizeof(data) ? 0 : ret;
 }
 
 int max_m5_needs_reset_model_data(const struct max_m5_data *m5_data)
@@ -517,21 +517,23 @@ static int max_m5_update_gauge_custom_parameters(struct max_m5_data *m5_data)
 
 		ret = REGMAP_READ(regmap, MAX_M5_CONFIG2, &data);
 		if (ret == 0 && !(data & MAX_M5_CONFIG2_LDMDL)) {
-			int temp;
+			ret = REGMAP_READ(regmap, MAX_M5_REPCAP, &data);
+			if (ret == 0 && data != 0) {
+				int temp;
 
-			temp = max_m5_model_read_version(m5_data);
-			if (m5_data->model_version == MAX_M5_INVALID_VERSION) {
-				dev_info(m5_data->dev, "No Model Version, Current %x\n",
-					 temp);
-			} else if (temp != m5_data->model_version) {
-				dev_info(m5_data->dev, "Model Version %x, Mismatch %x\n",
-					 m5_data->model_version, temp);
-				return -EINVAL;
+				temp = max_m5_model_read_version(m5_data);
+				if (m5_data->model_version == MAX_M5_INVALID_VERSION) {
+					dev_info(m5_data->dev, "No Model Version, Current %x\n",
+						 temp);
+				} else if (temp != m5_data->model_version) {
+					dev_info(m5_data->dev, "Model Version %x, Mismatch %x\n",
+						 m5_data->model_version, temp);
+					return -EINVAL;
+				}
+
+				return 0;
 			}
-
-			return 0;
 		}
-
 	}
 
 	return -ETIMEDOUT;
@@ -1124,6 +1126,17 @@ int max_m5_fg_model_cstr(char *buf, int max, const struct max_m5_data *m5_data)
 				 m5_data->custom_model[i]);
 
 	return len;
+}
+
+int max_m5_get_rc_switch_param(struct max_m5_data *m5_data, u16 *rc2_tempco, u16 *rc2_learncfg)
+{
+	if (m5_data->parameters.tempco <= 0 || m5_data->parameters.learncfg <= 0)
+		return -EINVAL;
+
+	*rc2_tempco = m5_data->parameters.tempco;
+	*rc2_learncfg = m5_data->parameters.learncfg;
+
+	return 0;
 }
 
 /* custom model parameters */

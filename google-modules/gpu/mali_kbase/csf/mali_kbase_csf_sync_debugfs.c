@@ -366,7 +366,7 @@ static void kbasep_csf_sync_print_kcpu_cqs_set_op(struct kbase_context *kctx, ch
 }
 
 /**
- * kbasep_csf_kcpu_debugfs_print_queue() - Print debug data for a KCPU queue
+ * kbasep_csf_sync_kcpu_debugfs_print_queue() - Print debug data for a KCPU queue
  *
  * @kctx:  The kbase context.
  * @file:  The seq_file to print to.

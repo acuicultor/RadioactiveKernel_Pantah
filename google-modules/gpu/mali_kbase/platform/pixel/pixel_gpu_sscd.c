@@ -8,7 +8,9 @@
 /* Mali core includes */
 #include <mali_kbase.h>
 #include <csf/mali_kbase_csf_trace_buffer.h>
+#include <csf/mali_kbase_csf_firmware.h>
 #include <csf/mali_kbase_csf_firmware_cfg.h>
+#include <csf/mali_kbase_csf_firmware_core_dump.h>
 
 /* Pixel integration includes */
 #include "mali_kbase_config_platform.h"
@@ -53,6 +55,7 @@ enum
 	PDC_STATUS = 0x8,
 	KTRACE = 0x9,
 	CONTEXTS = 0xA,
+	FW_CORE_DUMP = 0xB,
 	NUM_SEGMENTS
 } sscd_segs;
 
@@ -356,6 +359,88 @@ static int get_and_init_contexts(struct kbase_device *kbdev,
 }
 #endif
 
+struct pixel_fw_core_dump {
+	char magic[4];
+	u32 reserved;
+	char git_sha[BUILD_INFO_GIT_SHA_LEN];
+	char core_dump[];
+};
+
+static void get_and_init_fw_core_dump(struct kbase_device *kbdev, struct sscd_segment *seg)
+{
+	const size_t core_dump_size = get_fw_core_dump_size(kbdev);
+
+	int i;
+	struct pixel_fw_core_dump *fw_core_dump;
+	struct kbase_csf_firmware_interface *interface;
+	struct page *page;
+	u32 *p;
+	size_t size;
+	size_t write_size;
+
+	if (core_dump_size == -1)
+	{
+		dev_err(kbdev->dev, "pixel: failed to get firmware core dump size");
+	}
+
+	seg->size = sizeof(struct pixel_fw_core_dump) + core_dump_size;
+	seg->addr = kzalloc(seg->size, GFP_KERNEL);
+
+	if (seg->addr == NULL) {
+		seg->size = 0;
+		dev_err(kbdev->dev, "pixel: failed to allocate for firmware core dump buffer");
+		return;
+	}
+
+	fw_core_dump = (struct pixel_fw_core_dump *) seg->addr;
+
+	strncpy(fw_core_dump->magic, "fwcd", 4);
+	memcpy(fw_core_dump->git_sha, fw_git_sha, BUILD_INFO_GIT_SHA_LEN);
+
+	// Dumping ELF header
+	{
+		struct fw_core_dump_data private = {.kbdev = kbdev};
+		struct seq_file m = {.private = &private, .buf = fw_core_dump->core_dump, .size = core_dump_size};
+		fw_core_dump_write_elf_header(&m);
+		size = m.count;
+		if (unlikely(m.count >= m.size))
+			dev_warn(kbdev->dev, "firmware core dump header may be larger than buffer size");
+	}
+
+	// Dumping pages
+	list_for_each_entry(interface, &kbdev->csf.firmware_interfaces, node) {
+		/* Skip memory sections that cannot be read or are protected. */
+		if ((interface->flags & CSF_FIRMWARE_ENTRY_PROTECTED) ||
+		    (interface->flags & CSF_FIRMWARE_ENTRY_READ) == 0)
+			continue;
+
+		for(i = 0; i < interface->num_pages; i++)
+		{
+			page = as_page(interface->phys[i]);
+			write_size = size < core_dump_size ? min(core_dump_size - size, (size_t) FW_PAGE_SIZE) : 0;
+			if (write_size)
+			{
+				p = kmap_atomic(page);
+				memcpy(fw_core_dump->core_dump + size, p, write_size);
+				kunmap_atomic(p);
+			}
+			size += FW_PAGE_SIZE;
+
+			if (size < FW_PAGE_SIZE)
+				break;
+		}
+	}
+
+	if (unlikely(size != core_dump_size))
+	{
+		dev_err(kbdev->dev, "firmware core dump size and buffer size are different");
+		kfree(seg->addr);
+		seg->addr = NULL;
+		seg->size = 0;
+	}
+
+	return;
+}
 /*
  * Stub pending FW support
  */
@@ -493,6 +578,9 @@ void gpu_sscd_dump(struct kbase_device *kbdev, const char* reason)
 	unsigned long flags, current_ts = jiffies;
 	struct pixel_gpu_pdc_status pdc_status;
 	static unsigned long last_hang_sscd_ts;
+#if MALI_USE_CSF
+	int fwcd_err;
+#endif
 
 	if (!strcmp(reason, "GPU hang")) {
 		/* GPU hang - avoid multiple coredumps for the same hang until
@@ -514,6 +602,12 @@ void gpu_sscd_dump(struct kbase_device *kbdev, const char* reason)
 		dev_warn(kbdev->dev, "pixel: failed to report core dump, sscd_report was NULL");
 		return;
 	}
+
+#if MALI_USE_CSF
+	fwcd_err = fw_core_dump_create(kbdev);
+	if (fwcd_err)
+		dev_err(kbdev->dev, "pixel: failed to create firmware core dump (%d)", fwcd_err);
+#endif
 
 	ec = segments_init(kbdev, segs);
 	if (ec != 0) {
@@ -554,7 +648,11 @@ void gpu_sscd_dump(struct kbase_device *kbdev, const char* reason)
 		dev_err(kbdev->dev,
 			"could not collect active contexts: rc: %i", ec);
 	}
+
+	if (!fwcd_err)
+		get_and_init_fw_core_dump(kbdev, &segs[FW_CORE_DUMP]);
 #endif
+
 	spin_unlock_irqrestore(&kbdev->hwaccess_lock, flags);
 
 	/* Acquire the pm lock to prevent modifications to the rail state log */

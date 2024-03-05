@@ -31,9 +31,6 @@
 #include "mali_kbase_csf_firmware_core_dump.h"
 #include "backend/gpu/mali_kbase_pm_internal.h"
 
-/* Page size in bytes in use by MCU. */
-#define FW_PAGE_SIZE 4096
-
 /*
  * FW image header core dump data format supported.
  * Currently only version 0.1 is supported.
@@ -105,15 +102,6 @@ struct elf_prstatus32 {
 	struct prstatus32_timeval pr_cstime;	/* Cumulative system time. */
 	u32 pr_reg[18];				/* GP registers. */
 	int pr_fpvalid;				/* True if math copro being used. */
-};
-
-/**
- * struct fw_core_dump_data - Context for seq_file operations used on 'fw_core_dump'
- * debugfs file.
- * @kbdev: Instance of a GPU platform device that implements a CSF interface.
- */
-struct fw_core_dump_data {
-	struct kbase_device *kbdev;
 };
 
 /*
@@ -405,7 +393,7 @@ static unsigned int fw_core_dump_create_prstatus_note(char *name, struct elf_prs
  * * 0		- success
  * * -ENOMEM	- not enough memory for allocating ELF32 note
  */
-static int fw_core_dump_write_elf_header(struct seq_file *m)
+int fw_core_dump_write_elf_header(struct seq_file *m)
 {
 	struct elf32_hdr hdr;
 	struct elf32_phdr phdr;
@@ -496,13 +484,48 @@ static int fw_core_dump_write_elf_header(struct seq_file *m)
 	return 0;
 }
 
+#define MAX_FW_CORE_DUMP_HEADER_SIZE (1 << 14)
+
+/**
+ * get_fw_core_dump_size - Get firmware core dump size
+ * @kbdev: Instance of a GPU platform device that implements a CSF interface.
+ *
+ * Return: size on success, -1 otherwise.
+ */
+size_t get_fw_core_dump_size(struct kbase_device *kbdev)
+{
+	static char buffer[MAX_FW_CORE_DUMP_HEADER_SIZE];
+	size_t size;
+	struct fw_core_dump_data private = {.kbdev = kbdev};
+	struct seq_file m = {.private = &private, .buf = buffer, .size = MAX_FW_CORE_DUMP_HEADER_SIZE};
+	struct kbase_csf_firmware_interface *interface;
+
+	fw_core_dump_write_elf_header(&m);
+	if (unlikely(m.count >= m.size)) {
+		dev_warn(kbdev->dev, "firmware core dump header may be larger than buffer size");
+		return -1;
+	}
+	size = m.count;
+
+	list_for_each_entry(interface, &kbdev->csf.firmware_interfaces, node) {
+		/* Skip memory sections that cannot be read or are protected. */
+		if ((interface->flags & CSF_FIRMWARE_ENTRY_PROTECTED) ||
+		    (interface->flags & CSF_FIRMWARE_ENTRY_READ) == 0)
+			continue;
+
+		size += interface->num_pages * FW_PAGE_SIZE;
+	}
+
+	return size;
+}
+
 /**
  * fw_core_dump_create - Requests firmware to save state for a firmware core dump
  * @kbdev: Instance of a GPU platform device that implements a CSF interface.
  *
  * Return: 0 on success, error code otherwise.
  */
-static int fw_core_dump_create(struct kbase_device *kbdev)
+int fw_core_dump_create(struct kbase_device *kbdev)
 {
 	int err;
 

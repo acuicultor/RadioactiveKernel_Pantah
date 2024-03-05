@@ -656,41 +656,49 @@ static int audio_capture_eraser_enable_ctl_set(struct snd_kcontrol *kcontrol,
 	return err;
 }
 
-#if ! IS_ENABLED(CONFIG_SOC_GS101)
 static int hotword_tap_enable_ctl_get(struct snd_kcontrol *kcontrol,
 					       struct snd_ctl_elem_value *ucontrol)
 {
 	struct aoc_chip *chip = snd_kcontrol_chip(kcontrol);
+	if (chip->hotword_supported) {
+		if (mutex_lock_interruptible(&chip->audio_mutex))
+			return -EINTR;
 
-	if (mutex_lock_interruptible(&chip->audio_mutex))
-		return -EINTR;
+		ucontrol->value.integer.value[0] = chip->hotword_tap_enable;
 
-	ucontrol->value.integer.value[0] = chip->hotword_tap_enable;
+		mutex_unlock(&chip->audio_mutex);
 
-	mutex_unlock(&chip->audio_mutex);
-
-	return 0;
+		return 0;
+	} else {
+		pr_err("WARN:hotword is not supported on this device\n");
+		return 0;
+	}
 }
 
 static int hotword_tap_enable_ctl_set(struct snd_kcontrol *kcontrol,
 					       struct snd_ctl_elem_value *ucontrol)
 {
 	struct aoc_chip *chip = snd_kcontrol_chip(kcontrol);
-	int err = 0;
+	if (chip->hotword_supported) {
+		int err = 0;
 
-	if (mutex_lock_interruptible(&chip->audio_mutex))
-		return -EINTR;
+		if (mutex_lock_interruptible(&chip->audio_mutex))
+			return -EINTR;
 
-	chip->hotword_tap_enable = ucontrol->value.integer.value[0];
-	err = aoc_hotword_tap_enable(chip, chip->hotword_tap_enable);
-	if (err < 0)
-		pr_err("ERR:%d hotword_tap %s fail\n", err,
-		       (chip->hotword_tap_enable) ? "Enable" : "Disable");
+		chip->hotword_tap_enable = ucontrol->value.integer.value[0];
+		err = aoc_hotword_tap_enable(chip, chip->hotword_tap_enable);
+		if (err < 0)
+			pr_err("ERR:%d hotword_tap %s fail\n", err,
+				(chip->hotword_tap_enable) ? "Enable" : "Disable");
 
-	mutex_unlock(&chip->audio_mutex);
-	return err;
+		mutex_unlock(&chip->audio_mutex);
+		return err;
+	}
+	 else {
+		pr_err("WARN:hotword is not supported on this device\n");
+		return 0;
+	}
 }
-#endif
 
 static int audio_cca_module_load_ctl_get(struct snd_kcontrol *kcontrol,
 					       struct snd_ctl_elem_value *ucontrol)
@@ -2119,12 +2127,8 @@ static struct snd_kcontrol_new snd_aoc_ctl[] = {
 
 	SOC_SINGLE_EXT("Audio Capture Eraser Enable", SND_SOC_NOPM, 0, 1, 0,
 		       audio_capture_eraser_enable_ctl_get, audio_capture_eraser_enable_ctl_set),
-
-#if ! IS_ENABLED(CONFIG_SOC_GS101)
 	SOC_SINGLE_EXT("Hotword Tap Enable", SND_SOC_NOPM, 0, 1, 0,
 		       hotword_tap_enable_ctl_get, hotword_tap_enable_ctl_set),
-#endif
-
 	SOC_ENUM_EXT("Audio Capture Mic Source", audio_capture_mic_source_enum,
 		     audio_capture_mic_source_get, audio_capture_mic_source_set),
 

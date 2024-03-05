@@ -27,6 +27,18 @@ struct kbase_device;
 /** Offset of the last field of core dump entry from the image header */
 #define CORE_DUMP_ENTRY_START_ADDR_OFFSET (0x4)
 
+/* Page size in bytes in use by MCU. */
+#define FW_PAGE_SIZE 4096
+
+/**
+ * struct fw_core_dump_data - Context for seq_file operations used on 'fw_core_dump'
+ * debugfs file.
+ * @kbdev: Instance of a GPU platform device that implements a CSF interface.
+ */
+struct fw_core_dump_data {
+	struct kbase_device *kbdev;
+};
+
 /**
  * kbase_csf_firmware_core_dump_entry_parse() - Parse a "core dump" entry from
  *                                              the image header.
@@ -61,5 +73,52 @@ int kbase_csf_firmware_core_dump_entry_parse(struct kbase_device *kbdev, const u
  *     cat /sys/kernel/debug/mali0/fw_core_dump
  */
 void kbase_csf_firmware_core_dump_init(struct kbase_device *const kbdev);
+
+/**
+ * get_fw_core_dump_size - Get firmware core dump size
+ * @kbdev: Instance of a GPU platform device that implements a CSF interface.
+ *
+ * Return: size on success, -1 otherwise.
+ */
+size_t get_fw_core_dump_size(struct kbase_device *kbdev);
+
+/**
+ * fw_core_dump_create - Requests firmware to save state for a firmware core dump
+ * @kbdev: Instance of a GPU platform device that implements a CSF interface.
+ *
+ * Return: 0 on success, error code otherwise.
+ */
+int fw_core_dump_create(struct kbase_device *kbdev);
+
+/**
+ * fw_core_dump_write_elf_header - Writes ELF header for the FW core dump
+ * @m: the seq_file handle
+ *
+ * Writes the ELF header of the core dump including program headers for
+ * memory sections and a note containing the current MCU register
+ * values.
+ *
+ * Excludes memory sections without read access permissions or
+ * are for protected memory.
+ *
+ * The data written is as follows:
+ * - ELF header
+ * - ELF PHDRs for memory sections
+ * - ELF PHDR for program header NOTE
+ * - ELF PRSTATUS note
+ * - 0-bytes padding to multiple of ELF_EXEC_PAGESIZE
+ *
+ * The actual memory section dumps should follow this (not written
+ * by this function).
+ *
+ * Retrieves the necessary information via the struct
+ * fw_core_dump_data stored in the private member of the seq_file
+ * handle.
+ *
+ * Return:
+ * * 0		- success
+ * * -ENOMEM	- not enough memory for allocating ELF32 note
+ */
+int fw_core_dump_write_elf_header(struct seq_file *m);
 
 #endif /* _KBASE_CSF_FIRMWARE_CORE_DUMP_H_ */

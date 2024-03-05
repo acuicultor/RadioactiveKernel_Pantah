@@ -2335,6 +2335,7 @@ static int aoc_path_probe(struct platform_device *pdev)
 		pr_err("%s: fail to reigster aoc path compon %d", __func__,
 		       ret);
 	}
+
 	return ret;
 }
 

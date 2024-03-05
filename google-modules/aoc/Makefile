@@ -1,7 +1,7 @@
 obj-$(CONFIG_WC_MBOX) += mailbox-wc.o
 
 obj-$(CONFIG_AOC_DRIVER)	+= aoc_core.o
-aoc_core-objs := aoc.o ../aoc_ipc/aoc_ipc_core.o aoc_firmware.o ion_physical_heap.o
+aoc_core-objs := aoc.o aoc_v1.o aoc_service_core.o ../aoc_ipc/aoc_ipc_core.o aoc_firmware.o ion_physical_heap.o
 
 obj-$(CONFIG_AOC_CHAR_DRIVER)   += aoc_char_dev.o
 obj-$(CONFIG_AOC_CONTROL_DRIVER)   += aoc_control_dev.o

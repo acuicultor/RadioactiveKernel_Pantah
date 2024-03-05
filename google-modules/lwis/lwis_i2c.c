@@ -73,10 +73,13 @@ static int perform_read_transfer(struct i2c_client *client, struct i2c_msg *msg,
 
 	const int num_msg = 2;
 
+	char trace_name[LWIS_MAX_NAME_STRING_LEN];
+	scnprintf(trace_name, LWIS_MAX_NAME_STRING_LEN, "i2c_read_%s", lwis_dev->name);
+
 	value_to_buf(offset, wbuf, offset_size_bytes);
-	LWIS_ATRACE_FUNC_BEGIN(lwis_dev, "i2c_read");
+	LWIS_ATRACE_FUNC_BEGIN(lwis_dev, trace_name);
 	ret = i2c_transfer(client->adapter, msg, num_msg);
-	LWIS_ATRACE_FUNC_END(lwis_dev, "i2c_read");
+	LWIS_ATRACE_FUNC_END(lwis_dev, trace_name);
 	return (ret == num_msg) ? 0 : ret;
 }
 
@@ -89,11 +92,14 @@ static int perform_write_transfer(struct i2c_client *client, struct i2c_msg *msg
 
 	const int num_msg = 1;
 
+	char trace_name[LWIS_MAX_NAME_STRING_LEN];
+	scnprintf(trace_name, LWIS_MAX_NAME_STRING_LEN, "i2c_write_%s", lwis_dev->name);
+
 	value_to_buf(offset, buf, offset_size_bytes);
 	value_to_buf(value, buf + offset_size_bytes, value_size_bytes);
-	LWIS_ATRACE_FUNC_BEGIN(lwis_dev, "i2c_write");
+	LWIS_ATRACE_FUNC_BEGIN(lwis_dev, trace_name);
 	ret = i2c_transfer(client->adapter, msg, num_msg);
-	LWIS_ATRACE_FUNC_END(lwis_dev, "i2c_write");
+	LWIS_ATRACE_FUNC_END(lwis_dev, trace_name);
 	return (ret == num_msg) ? 0 : ret;
 }
 
@@ -107,12 +113,15 @@ static int perform_write_batch_transfer(struct i2c_client *client, struct i2c_ms
 
 	const int num_msg = 1;
 
+	char trace_name[LWIS_MAX_NAME_STRING_LEN];
+	scnprintf(trace_name, LWIS_MAX_NAME_STRING_LEN, "i2c_write_batch_%s", lwis_dev->name);
+
 	value_to_buf(offset, buf, offset_size_bytes);
 	memcpy(buf + offset_size_bytes, value_buf, value_size_bytes);
 
-	LWIS_ATRACE_FUNC_BEGIN(lwis_dev, "i2c_write_batch");
+	LWIS_ATRACE_FUNC_BEGIN(lwis_dev, trace_name);
 	ret = i2c_transfer(client->adapter, msg, num_msg);
-	LWIS_ATRACE_FUNC_END(lwis_dev, "i2c_write_batch");
+	LWIS_ATRACE_FUNC_END(lwis_dev, trace_name);
 	return (ret == num_msg) ? 0 : ret;
 }
 

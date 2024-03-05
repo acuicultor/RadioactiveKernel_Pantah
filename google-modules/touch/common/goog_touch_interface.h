@@ -19,16 +19,15 @@
 #include "uapi/input/touch_offload.h"
 
 #define GTI_NAME "goog_touch_interface"
-#define GOOG_LOG_NAME(gti) ((gti && gti->dev) ? dev_name(gti->dev) : "GTI")
-#define GOOG_DBG(gti, fmt, args...)    pr_debug("[%s] %s: " fmt, GOOG_LOG_NAME(gti),\
-					__func__, ##args)
-#define GOOG_LOG(gti, fmt, args...)    pr_info("[%s] " fmt, GOOG_LOG_NAME(gti), ##args)
-#define GOOG_INFO(gti, fmt, args...)	pr_info("[%s] %s: " fmt, GOOG_LOG_NAME(gti),\
-					__func__, ##args)
-#define GOOG_WARN(gti, fmt, args...)    pr_warn("[%s] %s: " fmt, GOOG_LOG_NAME(gti),\
-					__func__, ##args)
-#define GOOG_ERR(gti, fmt, args...)    pr_err("[%s] %s: " fmt, GOOG_LOG_NAME(gti),\
-					__func__, ##args)
+#define GOOG_LOG_NAME(gti) ((gti && gti->dev) ? dev_name(gti->dev) : "gti")
+#define GOOG_DBG(gti, fmt, args...)  pr_debug("%s: " fmt, GOOG_LOG_NAME(gti), ##args)
+#define GOOG_INFO(gti, fmt, args...) pr_info("%s: " fmt, GOOG_LOG_NAME(gti), ##args)
+#define GOOG_WARN(gti, fmt, args...) pr_warn("%s: " fmt, GOOG_LOG_NAME(gti), ##args)
+#define GOOG_ERR(gti, fmt, args...)  pr_err("%s: " fmt, GOOG_LOG_NAME(gti), ##args)
+#define GOOG_LOGD(gti, fmt, args...) GOOG_DBG(gti, "%s: "fmt, __func__, ##args)
+#define GOOG_LOGI(gti, fmt, args...) GOOG_INFO(gti, "%s: "fmt, __func__, ##args)
+#define GOOG_LOGW(gti, fmt, args...) GOOG_WARN(gti, "%s: "fmt, __func__, ##args)
+#define GOOG_LOGE(gti, fmt, args...) GOOG_ERR(gti, "%s: "fmt, __func__, ##args)
 #define MAX_SLOTS 10
 
 #define GTI_DEBUG_KFIFO_LEN 4 /* must be power of 2. */

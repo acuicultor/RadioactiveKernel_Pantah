@@ -32,8 +32,6 @@
 
 #define PPS_UPDATE_DELAY_MS		2000
 
-#define get_boot_sec() div_u64(ktime_to_ns(ktime_get_boottime()), NSEC_PER_SEC)
-
 void pps_log(struct pd_pps_data *pps, const char *fmt, ...)
 {
 	va_list args;

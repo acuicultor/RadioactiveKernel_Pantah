@@ -53,3 +53,7 @@ struct sysmmu_entry *_aoc_fw_sysmmu_entry(const struct firmware *fw);
 struct aoc_image_config *_aoc_fw_image_config(const struct firmware *fw);
 
 u32 _aoc_fw_get_header_version(const struct firmware *fw);
+
+uint16_t _aoc_fw_bl_size(const struct firmware *fw);
+
+u32 *_aoc_fw_bl(const struct firmware *fw);

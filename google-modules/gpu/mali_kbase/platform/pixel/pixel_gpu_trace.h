@@ -45,6 +45,30 @@ TRACE_EVENT(gpu_power_state,
 	)
 );
 
+TRACE_EVENT(gpu_gov_rec_violate,
+	TP_PROTO(unsigned int recfreq, unsigned int retfreq,
+		unsigned int minlvfreq, unsigned int maxlvfreq),
+	TP_ARGS(recfreq, retfreq, minlvfreq, maxlvfreq),
+	TP_STRUCT__entry(
+		__field(unsigned int, recfreq)
+		__field(unsigned int, retfreq)
+		__field(unsigned int, minlvfreq)
+		__field(unsigned int, maxlvfreq)
+	),
+	TP_fast_assign(
+		__entry->recfreq	= recfreq;
+		__entry->retfreq	= retfreq;
+		__entry->minlvfreq	= minlvfreq;
+		__entry->maxlvfreq	= maxlvfreq;
+	),
+	TP_printk("rec=%u ret=%u min=%u max=%u",
+		__entry->recfreq,
+		__entry->retfreq,
+		__entry->minlvfreq,
+		__entry->maxlvfreq
+	)
+);
+
 #endif /* _TRACE_PIXEL_GPU_H */
 
 /* This part must be outside protection */

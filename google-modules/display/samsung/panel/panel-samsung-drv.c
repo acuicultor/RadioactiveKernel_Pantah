@@ -1251,7 +1251,7 @@ static bool panel_idle_queue_delayed_work(struct exynos_panel *ctx)
 	return false;
 }
 
-static void panel_update_idle_mode_locked(struct exynos_panel *ctx)
+static void panel_update_idle_mode_locked(struct exynos_panel *ctx, bool allow_delay_update)
 {
 	const struct exynos_panel_funcs *funcs = ctx->desc->exynos_panel_func;
 
@@ -1266,6 +1266,13 @@ static void panel_update_idle_mode_locked(struct exynos_panel *ctx)
 	if (ctx->idle_delay_ms && ctx->self_refresh_active && panel_idle_queue_delayed_work(ctx))
 		return;
 
+	if (!ctx->self_refresh_active && allow_delay_update) {
+		// delay update idle mode to next commit
+		ctx->panel_update_idle_mode_pending = true;
+		return;
+	}
+
+	ctx->panel_update_idle_mode_pending = false;
 	if (delayed_work_pending(&ctx->idle_work)) {
 		dev_dbg(ctx->dev, "%s: cancelling delayed idle work\n", __func__);
 		cancel_delayed_work(&ctx->idle_work);
@@ -1284,7 +1291,7 @@ static void panel_idle_work(struct work_struct *work)
 	dev_dbg(ctx->dev, "%s\n", __func__);
 
 	mutex_lock(&ctx->mode_lock);
-	panel_update_idle_mode_locked(ctx);
+	panel_update_idle_mode_locked(ctx, false);
 	mutex_unlock(&ctx->mode_lock);
 }
 
@@ -1309,7 +1316,7 @@ static ssize_t panel_idle_store(struct device *dev, struct device_attribute *att
 		if (idle_enabled)
 			ctx->last_panel_idle_set_ts = ktime_get();
 
-		panel_update_idle_mode_locked(ctx);
+		panel_update_idle_mode_locked(ctx, true);
 	}
 	mutex_unlock(&ctx->mode_lock);
 
@@ -1369,8 +1376,10 @@ static ssize_t min_vrefresh_store(struct device *dev, struct device_attribute *a
 	}
 
 	mutex_lock(&ctx->mode_lock);
-	ctx->min_vrefresh = min_vrefresh;
-	panel_update_idle_mode_locked(ctx);
+	if (ctx->min_vrefresh != min_vrefresh) {
+		ctx->min_vrefresh = min_vrefresh;
+		panel_update_idle_mode_locked(ctx, true);
+	}
 	mutex_unlock(&ctx->mode_lock);
 
 	return count;
@@ -1399,8 +1408,10 @@ static ssize_t idle_delay_ms_store(struct device *dev, struct device_attribute *
 	}
 
 	mutex_lock(&ctx->mode_lock);
-	ctx->idle_delay_ms = idle_delay_ms;
-	panel_update_idle_mode_locked(ctx);
+	if (ctx->idle_delay_ms != idle_delay_ms) {
+		ctx->idle_delay_ms = idle_delay_ms;
+		panel_update_idle_mode_locked(ctx, true);
+	}
 	mutex_unlock(&ctx->mode_lock);
 
 	return count;
@@ -1751,7 +1762,7 @@ static void exynos_panel_set_dimming(struct exynos_panel *ctx, bool dimming_on)
 	mutex_lock(&ctx->mode_lock);
 	if (dimming_on != ctx->dimming_on) {
 		funcs->set_dimming_on(ctx, dimming_on);
-		panel_update_idle_mode_locked(ctx);
+		panel_update_idle_mode_locked(ctx, false);
 	}
 	mutex_unlock(&ctx->mode_lock);
 }
@@ -1861,6 +1872,11 @@ static void exynos_panel_connector_atomic_pre_commit(
 	struct exynos_panel *ctx = exynos_connector_to_panel(exynos_connector);
 
 	exynos_panel_pre_commit_properties(ctx, exynos_new_state);
+
+	mutex_lock(&ctx->mode_lock);
+	if (ctx->panel_update_idle_mode_pending)
+		panel_update_idle_mode_locked(ctx, false);
+	mutex_unlock(&ctx->mode_lock);
 }
 
 static void exynos_panel_connector_atomic_commit(
@@ -3272,7 +3288,7 @@ static void exynos_panel_bridge_enable(struct drm_bridge *bridge,
 		dev_dbg(ctx->dev, "self refresh state : %s\n", __func__);
 
 		ctx->self_refresh_active = false;
-		panel_update_idle_mode_locked(ctx);
+		panel_update_idle_mode_locked(ctx, false);
 	} else {
 		exynos_panel_set_backlight_state(ctx, ctx->panel_state);
 
@@ -3422,7 +3438,7 @@ static void exynos_panel_bridge_disable(struct drm_bridge *bridge,
 		dev_dbg(ctx->dev, "self refresh state : %s\n", __func__);
 
 		ctx->self_refresh_active = true;
-		panel_update_idle_mode_locked(ctx);
+		panel_update_idle_mode_locked(ctx, false);
 		mutex_unlock(&ctx->mode_lock);
 	} else {
 		if (bridge->encoder) {

@@ -347,6 +347,8 @@ struct kbase_pm_event_log {
  * @callback_power_off_sc_rails: Callback invoked to turn off the shader core
  *                               power rails. See &struct kbase_pm_callback_conf.
  * @ca_cores_enabled: Cores that are currently available
+ * @apply_hw_issue_TITANHW_2938_wa: Indicates if the workaround for BASE_HW_ISSUE_TITANHW_2938
+ *                                  needs to be applied when unmapping memory from GPU.
  * @mcu_state: The current state of the micro-control unit, only applicable
  *             to GPUs that have such a component
  * @l2_state:     The current state of the L2 cache state machine. See
@@ -516,6 +518,7 @@ struct kbase_pm_backend_data {
 	u64 ca_cores_enabled;
 
 #if MALI_USE_CSF
+	bool apply_hw_issue_TITANHW_2938_wa;
 	enum kbase_mcu_state mcu_state;
 #endif
 	enum kbase_l2_core_state l2_state;

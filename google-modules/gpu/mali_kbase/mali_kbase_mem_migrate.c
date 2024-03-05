@@ -225,7 +225,7 @@ static int kbasep_migrate_page_pt_mapped(struct page *old_page, struct page *new
 	 * This blocks the CPU page fault handler from remapping pages.
 	 * Only MCU's mmut is device wide, i.e. no corresponding kctx.
 	 */
-	kbase_gpu_vm_lock(kctx);
+	kbase_gpu_vm_lock_with_pmode_sync(kctx);
 
 	ret = kbase_mmu_migrate_page(
 		as_tagged(page_to_phys(old_page)), as_tagged(page_to_phys(new_page)), old_dma_addr,
@@ -252,7 +252,7 @@ static int kbasep_migrate_page_pt_mapped(struct page *old_page, struct page *new
 		dma_unmap_page(kbdev->dev, new_dma_addr, PAGE_SIZE, DMA_BIDIRECTIONAL);
 
 	/* Page fault handler for CPU mapping unblocked. */
-	kbase_gpu_vm_unlock(kctx);
+	kbase_gpu_vm_unlock_with_pmode_sync(kctx);
 
 	return ret;
 }
@@ -291,7 +291,7 @@ static int kbasep_migrate_page_allocated_mapped(struct page *old_page, struct pa
 	/* Lock context to protect access to array of pages in physical allocation.
 	 * This blocks the CPU page fault handler from remapping pages.
 	 */
-	kbase_gpu_vm_lock(kctx);
+	kbase_gpu_vm_lock_with_pmode_sync(kctx);
 
 	/* Unmap the old physical range. */
 	unmap_mapping_range(kctx->kfile->filp->f_inode->i_mapping,
@@ -327,7 +327,7 @@ static int kbasep_migrate_page_allocated_mapped(struct page *old_page, struct pa
 		dma_unmap_page(kctx->kbdev->dev, new_dma_addr, PAGE_SIZE, DMA_BIDIRECTIONAL);
 
 	/* Page fault handler for CPU mapping unblocked. */
-	kbase_gpu_vm_unlock(kctx);
+	kbase_gpu_vm_unlock_with_pmode_sync(kctx);
 
 	return ret;
 }

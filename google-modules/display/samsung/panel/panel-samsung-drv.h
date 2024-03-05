@@ -440,6 +440,14 @@ struct exynos_panel_funcs {
 	 */
 	unsigned int (*get_te_usec)(struct exynos_panel *exynos_panel,
 				    const struct exynos_panel_mode *pmode);
+
+	/**
+	 * @on_queue_ddic_cmd
+	 *
+	 * This callback is to nofity the panel driver when a ddic command is queued.
+	 */
+	void (*on_queue_ddic_cmd)(struct exynos_panel *exynos_panel,
+			const struct mipi_dsi_msg *msg, const bool is_last);
 };
 
 /**
@@ -594,6 +602,8 @@ struct exynos_panel {
 	bool panel_idle_enabled;
 	/* indicates need to do specific handle when exiting idle on self refresh */
 	bool panel_need_handle_idle_exit;
+	/* indicates need to update idle mode setting when getting a commit */
+	bool panel_update_idle_mode_pending;
 	/* indicates self refresh is active */
 	bool self_refresh_active;
 	/* indicates if panel brightness is set or not after reset */

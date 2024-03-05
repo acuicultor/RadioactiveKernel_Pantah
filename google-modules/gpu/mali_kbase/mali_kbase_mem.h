@@ -1516,10 +1516,28 @@ int kbase_update_region_flags(struct kbase_context *kctx,
 void kbase_gpu_vm_lock(struct kbase_context *kctx);
 
 /**
+ * kbase_gpu_vm_lock_with_pmode_sync() - Wrapper of kbase_gpu_vm_lock.
+ * @kctx:  KBase context
+ *
+ * Same as kbase_gpu_vm_lock for JM GPU.
+ * Additionally acquire P.mode read-write semaphore for CSF GPU.
+ */
+void kbase_gpu_vm_lock_with_pmode_sync(struct kbase_context *kctx);
+
+/**
  * kbase_gpu_vm_unlock() - Release the per-context region list lock
  * @kctx:  KBase context
  */
 void kbase_gpu_vm_unlock(struct kbase_context *kctx);
+
+/**
+ * kbase_gpu_vm_unlock_with_pmode_sync() - Wrapper of kbase_gpu_vm_unlock.
+ * @kctx:  KBase context
+ *
+ * Same as kbase_gpu_vm_unlock for JM GPU.
+ * Additionally release P.mode read-write semaphore for CSF GPU.
+ */
+void kbase_gpu_vm_unlock_with_pmode_sync(struct kbase_context *kctx);
 
 int kbase_alloc_phy_pages(struct kbase_va_region *reg, size_t vsize, size_t size);
 

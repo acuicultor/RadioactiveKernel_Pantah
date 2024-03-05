@@ -97,8 +97,6 @@
 #define PPS_CC_TOLERANCE_PCT_DEFAULT	5
 #define PPS_CC_TOLERANCE_PCT_MAX	10
 
-#define get_boot_sec() div_u64(ktime_to_ns(ktime_get_boottime()), NSEC_PER_SEC)
-
 #define PDO_FIXED_FLAGS \
 	(PDO_FIXED_DUAL_ROLE | PDO_FIXED_DATA_SWAP | PDO_FIXED_USB_COMM)
 #define PD_SNK_MAX_MA			3000
@@ -119,6 +117,17 @@
  * DT by mapping the levels with google,thermal-stats-lvl-map.
  */
 #define STATS_THERMAL_LEVELS_MAX (10)
+
+/* keep the highest power (V/I) rating, as it may drop near EOC  */
+#define UPDATE_ADAPTER_POWER(ad, voltage_max, amperage_max) \
+	do { \
+		voltage_max /= 100000; \
+		amperage_max /= 100000; \
+		if ((ad->ad_voltage * ad->ad_amperage) < (voltage_max * amperage_max)) { \
+			ad->ad_voltage = voltage_max; \
+			ad->ad_amperage = amperage_max; \
+		} \
+	} while (0)
 
 struct chg_drv;
 
@@ -332,6 +341,7 @@ struct chg_drv {
 	struct gbms_ce_tier_stats thermal_stats[STATS_THERMAL_LEVELS_MAX];
 	ktime_t dd_stats_last_update;
 	ktime_t thermal_stats_last_update;
+	int thermal_stats_last_level;
 	int *thermal_stats_mdis_levels;
 	int thermal_levels_count;
 
@@ -466,6 +476,7 @@ static void thermal_stats_init(struct chg_drv *chg_drv)
 	}
 
 	chg_drv->thermal_stats_last_update = get_boot_sec();
+	chg_drv->thermal_stats_last_level = 0;
 	mutex_unlock(&chg_drv->stats_lock);
 }
 
@@ -514,6 +525,11 @@ stats_update_unlock:
 
 static void dd_stats_update(struct chg_drv *chg_drv)
 {
+	if (!chg_drv->bd_state.dd_triggered) {
+		chg_drv->dd_stats_last_update = get_boot_sec();
+		return;
+	}
+
 	chg_stats_update(chg_drv, &chg_drv->dd_stats, &chg_drv->dd_stats_last_update);
 }
 
@@ -687,8 +703,7 @@ static int info_usb_state(union gbms_ce_adapter_details *ad,
 		return 0;
 
 	ad->ad_type = ad_type;
-	ad->ad_voltage = voltage_max / 100000;
-	ad->ad_amperage = amperage_max / 100000;
+	UPDATE_ADAPTER_POWER(ad, voltage_max, amperage_max);
 
 	return 0;
 }
@@ -732,8 +747,7 @@ static int info_wlc_state(union gbms_ce_adapter_details *ad,
 		ad->ad_type = CHG_EV_ADAPTER_TYPE_WLC_SPP;
 	}
 
-	ad->ad_voltage = voltage_max / 100000;
-	ad->ad_amperage = amperage_max / 100000;
+	UPDATE_ADAPTER_POWER(ad, voltage_max, amperage_max);
 
 	return 0;
 }
@@ -769,8 +783,7 @@ static int info_ext_state(union gbms_ce_adapter_details *ad,
 	else
 		ad->ad_type = CHG_EV_ADAPTER_TYPE_EXT;
 
-	ad->ad_voltage = voltage_max / 100000;
-	ad->ad_amperage = amperage_max / 100000;
+	UPDATE_ADAPTER_POWER(ad, voltage_max, amperage_max);
 
 	return 0;
 }
@@ -1185,18 +1198,32 @@ static bool chg_work_check_usb_state(struct chg_drv *chg_drv)
 	return usb_online > 0 || usb_present == 1;
 }
 
+static bool chg_work_check_ext_state(struct power_supply *ext_psy)
+{
+	int ext_online, ext_present;
+
+	if (!ext_psy)
+		return false;
+
+	ext_online = GPSY_GET_PROP(ext_psy, POWER_SUPPLY_PROP_ONLINE);
+	ext_present = GPSY_GET_PROP(ext_psy, POWER_SUPPLY_PROP_PRESENT);
+
+	return ext_online == 1 || ext_present == 1;
+}
+
 /* not executed when battery is NOT present */
 static int chg_work_roundtrip(struct chg_drv *chg_drv,
 			      union gbms_charger_state *chg_state)
 {
 	struct power_supply *chg_psy = chg_drv->chg_psy;
 	struct power_supply *wlc_psy = chg_drv->wlc_psy;
+	struct power_supply *ext_psy = chg_drv->ext_psy;
 	union gbms_charger_state batt_chg_state;
 	const int upperbd = chg_drv->charge_stop_level;
 	const int lowerbd = chg_drv->charge_start_level;
 	int fv_uv = -1, cc_max = -1;
 	int update_interval, rc;
-	bool wlc_on = 0, usb_on = 0;
+	bool wlc_on, usb_on, ext_on;
 
 	rc = gbms_read_charger_state(chg_state, chg_psy);
 	if (rc < 0)
@@ -1225,7 +1252,9 @@ static int chg_work_roundtrip(struct chg_drv *chg_drv,
 	 */
 	wlc_on = chg_work_check_wlc_state(wlc_psy);
 	usb_on = chg_work_check_usb_state(chg_drv);
-	if ((wlc_on || usb_on) && batt_chg_state.f.chg_status == POWER_SUPPLY_STATUS_DISCHARGING) {
+	ext_on = chg_work_check_ext_state(ext_psy);
+	if ((wlc_on || usb_on || ext_on) &&
+	    batt_chg_state.f.chg_status == POWER_SUPPLY_STATUS_DISCHARGING) {
 		if (!chg_drv->debug_input_suspend)
 			batt_chg_state.f.chg_status = POWER_SUPPLY_STATUS_NOT_CHARGING;
 		batt_chg_state.f.flags = gbms_gen_chg_flags(chg_state->f.chg_status,
@@ -1536,9 +1565,10 @@ static int bd_fan_calculate_level(struct bd_data *bd_state)
 	return bd_fan_level;
 }
 
-static void thermal_stats_update(struct chg_drv *chg_drv) {
+static void thermal_stats_update(struct chg_drv *chg_drv)
+{
 	int i;
-	int thermal_level = -1;
+	int thermal_level;
 
 	if (chg_drv->thermal_levels_count <= 0 &&
 	    chg_drv->thermal_devices[CHG_TERMAL_DEVICE_FCC].thermal_levels <= 0)
@@ -1551,23 +1581,13 @@ static void thermal_stats_update(struct chg_drv *chg_drv) {
 	else
 		thermal_level = chg_drv->thermal_devices[CHG_TERMAL_DEVICE_FCC].current_level;
 
-	/* The value from the votable may be uninitialized (negative). */
-	if (thermal_level <= 0) {
-		gvotable_cast_int_vote(chg_drv->thermal_level_votable, "THERMAL_UPDATE", 0, false);
-		/* Do not log any stats in level 0, so store updated time. */
-		mutex_lock(&chg_drv->stats_lock);
-		chg_drv->thermal_stats_last_update = get_boot_sec();
-		mutex_unlock(&chg_drv->stats_lock);
-		return;
-	}
-
 	if (chg_drv->thermal_levels_count) {
 		/* Translate the thermal tier to a stats tier */
 		for (i = 0; i < chg_drv->thermal_levels_count; i++)
 			if (thermal_level <= chg_drv->thermal_stats_mdis_levels[i])
 				break;
 	} else {
-		/* Traditinal thermal setting */
+		/* Traditional thermal setting */
 		i = thermal_level;
 	}
 
@@ -1575,13 +1595,34 @@ static void thermal_stats_update(struct chg_drv *chg_drv) {
 	if (i >= STATS_THERMAL_LEVELS_MAX)
 		return;
 
-	/* better to use i - 1 ? */
-	gvotable_cast_int_vote(chg_drv->thermal_level_votable,
-			       "THERMAL_UPDATE", i, true);
+	/* If current level and last level are both 0, skip vote */
+	if (i == 0 && chg_drv->thermal_stats_last_level == 0) {
+		mutex_lock(&chg_drv->stats_lock);
+		chg_drv->thermal_stats_last_update = get_boot_sec();
+		mutex_unlock(&chg_drv->stats_lock);
+		return;
+	}
 
-	chg_stats_update(chg_drv,
-			 &chg_drv->thermal_stats[i],
+	gvotable_cast_int_vote(chg_drv->thermal_level_votable, "THERMAL_UPDATE",
+			       i, i > 0 ? true : false);
+}
+
+static int thermal_tier_stats_update(struct gvotable_election *el,
+				     const char *reason, void *vote)
+{
+	struct chg_drv *chg_drv = gvotable_get_data(el);
+	int thermal_level = GVOTABLE_PTR_TO_INT(vote);
+	int thermal_tier_idx;
+
+	mutex_lock(&chg_drv->stats_lock);
+	thermal_tier_idx = thermal_level ? thermal_level : chg_drv->thermal_stats_last_level;
+	chg_drv->thermal_stats_last_level = thermal_level;
+	mutex_unlock(&chg_drv->stats_lock);
+
+	chg_stats_update(chg_drv, &chg_drv->thermal_stats[thermal_tier_idx],
 			 &chg_drv->thermal_stats_last_update);
+
+	return 0;
 }
 
 static int msc_temp_defend_dryrun_cb(struct gvotable_election *el,
@@ -2045,8 +2086,7 @@ static void bd_dd_run_defender(struct chg_drv *chg_drv, int soc, int *disable_ch
 						(soc >= upperbd));
 
 	/* Start DD stats */
-	if (bd_state->dd_state == DOCK_DEFEND_ACTIVE)
-		dd_stats_update(chg_drv);
+	dd_stats_update(chg_drv);
 
 	/* need icl_ramp_work when disable_pwrsrc 1 -> 0 */
 	if (!*disable_pwrsrc && chg_drv->disable_pwrsrc) {
@@ -2414,9 +2454,7 @@ static void chg_work(struct work_struct *work)
 		 * Update DD stats last time if DD is active.
 		 * NOTE: *** Ensure this is done before disconnect indication to google_battery
 		 */
-		if (chg_drv->dd_stats.vtier_idx == GBMS_STATS_BD_TI_DOCK &&
-		    chg_drv->bd_state.dd_state == DOCK_DEFEND_ACTIVE)
-			dd_stats_update(chg_drv);
+		dd_stats_update(chg_drv);
 
 		/* reset dock_defend */
 		if (chg_drv->bd_state.dd_triggered) {
@@ -2515,9 +2553,7 @@ static void chg_work(struct work_struct *work)
 	}
 
 	/* Book dd stats to correct charging type if DD active */
-	if (chg_drv->dd_stats.vtier_idx == GBMS_STATS_BD_TI_DOCK &&
-	    chg_drv->bd_state.dd_state == DOCK_DEFEND_ACTIVE)
-			dd_stats_update(chg_drv);
+	dd_stats_update(chg_drv);
 
 	/*
 	 * chg_drv->disable_pwrsrc -> chg_drv->disable_charging
@@ -3315,10 +3351,8 @@ static ssize_t set_dd_settings(struct device *dev, struct device_attribute *attr
 		chg_drv->bd_state.dd_settings = val;
 
 		/* Update DD stats tier. Book stats till now to DOCK tier */
-		if (DOCK_DEFEND_USER_CLEARED == chg_drv->bd_state.dd_settings) {
+		if (DOCK_DEFEND_USER_CLEARED == chg_drv->bd_state.dd_settings)
 			dd_stats_update(chg_drv);
-			chg_drv->dd_stats.vtier_idx = GBMS_STATS_BD_TI_DOCK_CLEARED;
-		}
 
 		if (chg_drv->bat_psy)
 			power_supply_changed(chg_drv->bat_psy);
@@ -4503,7 +4537,7 @@ static int chg_create_votables(struct chg_drv *chg_drv)
 
 	chg_drv->thermal_level_votable =
 		gvotable_create_int_election(NULL, gvotable_comparator_least_recent,
-					     NULL, chg_drv);
+					     thermal_tier_stats_update, chg_drv);
 	if (IS_ERR_OR_NULL(chg_drv->thermal_level_votable)) {
 		ret = PTR_ERR(chg_drv->thermal_level_votable);
 		chg_drv->thermal_level_votable = NULL;

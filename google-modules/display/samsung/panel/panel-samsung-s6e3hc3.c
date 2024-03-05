@@ -533,8 +533,12 @@ static bool s6e3hc3_set_self_refresh(struct exynos_panel *ctx, bool enable)
 		return false;
 
 	/* self refresh is not supported in lp mode since that always makes use of early exit */
-	if (pmode->exynos_mode.is_lp_mode)
+	if (pmode->exynos_mode.is_lp_mode) {
+		/* set 10Hz while self refresh is active, otherwise clear it */
+		ctx->panel_idle_vrefresh = enable ? 10 : 0;
+		backlight_state_changed(ctx->bl);
 		return false;
+	}
 
 	idle_vrefresh = s6e3hc3_get_min_idle_vrefresh(ctx, pmode);
 
@@ -543,13 +547,17 @@ static bool s6e3hc3_set_self_refresh(struct exynos_panel *ctx, bool enable)
 		 * if idle mode is on inactivity, may need to update the target fps for auto mode,
 		 * or switch to manual mode if idle should be disabled (idle_vrefresh=0)
 		 */
-		if ((pmode->idle_mode == IDLE_MODE_ON_INACTIVITY) &&
-		    (spanel->auto_mode_vrefresh != idle_vrefresh)) {
-			dev_dbg(ctx->dev,
-				"early exit update needed for mode: %s (idle_vrefresh: %d)\n",
-				pmode->mode.name, idle_vrefresh);
-			s6e3hc3_update_refresh_mode(ctx, pmode, idle_vrefresh);
-			return true;
+		if (pmode->idle_mode == IDLE_MODE_ON_INACTIVITY) {
+			/* simply update idle vrefresh follow by self refresh */
+			ctx->panel_idle_vrefresh = enable ? idle_vrefresh : 0;
+			backlight_state_changed(ctx->bl);
+			if (spanel->auto_mode_vrefresh != idle_vrefresh) {
+				dev_dbg(ctx->dev,
+					"early exit update needed for mode: %s (idle_vrefresh: %d)\n",
+					pmode->mode.name, idle_vrefresh);
+				s6e3hc3_update_refresh_mode(ctx, pmode, idle_vrefresh);
+				return true;
+			}
 		}
 		return false;
 	}
@@ -819,7 +827,7 @@ static void s6e3hc3_extra_lhbm_settings(struct exynos_panel *ctx,
 	}
 }
 
-static inline bool is_local_gamma_supported(struct exynos_panel *ctx)
+static inline is_local_gamma_supported(struct exynos_panel *ctx)
 {
 	if ((ctx->panel_rev == PANEL_REV_EVT1) &&
 			 s6e3hc3_panel_id3_doe3_config(ctx))

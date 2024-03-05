@@ -42,6 +42,9 @@
 #include <sound/soc.h>
 #include <sound/initval.h>
 #include <sound/tlv.h>
+#if IS_ENABLED(CONFIG_GOOG_CUST)
+#include <linux/timekeeping.h>
+#endif
 
 #include "cl_dsp.h"
 #include "../../../gs-google/drivers/soc/google/vh/kernel/systrace.h"
@@ -667,6 +670,12 @@
 
 #define CS40L26_TEST_KEY_UNLOCK_CODE1	0x00000055
 #define CS40L26_TEST_KEY_UNLOCK_CODE2	0x000000AA
+
+#if IS_ENABLED(CONFIG_GOOG_CUST)
+/* Reset Recovery */
+#define CS40L26_RESET_MAX_COUNT			10
+#define CS40L26_RESET_COOLDOWN_TIMEOUT_SEC	300
+#endif
 
 /* DSP State */
 #define CS40L26_DSP_STATE_HIBERNATE		0
@@ -1432,6 +1441,16 @@ enum cs40l26_pm_state {
 	CS40L26_PM_STATE_SHUTDOWN,
 };
 
+#if IS_ENABLED(CONFIG_GOOG_CUST)
+enum cs40l26_reset_event {
+	CS40L26_RESET_EVENT_NONEED,
+	CS40L26_RESET_EVENT_TRIGGER,
+	CS40L26_RESET_EVENT_ONGOING,
+	CS40L26_RESET_EVENT_COOLDOWN,
+	CS40L26_RESET_EVENT_FAILED,
+};
+#endif
+
 /* structs */
 
 struct cs40l26_owt_section {
@@ -1568,6 +1587,13 @@ struct cs40l26_private {
 	bool dbg_fw_ym;
 	struct cl_dsp_debugfs *cl_dsp_db;
 #endif
+#if IS_ENABLED(CONFIG_GOOG_CUST)
+	struct work_struct reset_work;
+	enum cs40l26_reset_event reset_event;
+	u8 reset_count;
+	time64_t reset_time_s;
+	time64_t reset_time_e;
+#endif
 };
 
 struct cs40l26_codec {
@@ -1658,6 +1684,9 @@ extern struct attribute_group cs40l26_dev_attr_dbc_group;
 void cs40l26_debugfs_init(struct cs40l26_private *cs40l26);
 void cs40l26_debugfs_cleanup(struct cs40l26_private *cs40l26);
 
+#endif
+#if IS_ENABLED(CONFIG_GOOG_CUST)
+void cs40l26_make_reset_decision(struct cs40l26_private *cs40l26, const char *func);
 #endif
 
 #endif /* __CS40L26_H__ */

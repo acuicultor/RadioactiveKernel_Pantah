@@ -29,7 +29,7 @@ extern struct be_path_cache port_array[PORT_MAX];
  * TODO: TDM/I2S will be removed from port naming and will be replaced
  * by sink-associated devices such as spker, headphone, bt, usb, mode
  */
-static int aoc_audio_sink[] = {
+static aoc_audio_sink[] = {
 	[PORT_I2S_0_RX] = SINK_HEADPHONE, [PORT_I2S_0_TX] = -1,
 	[PORT_I2S_1_RX] = SINK_BT,        [PORT_I2S_1_TX] = -1,
 	[PORT_I2S_2_RX] = SINK_USB,       [PORT_I2S_2_TX] = -1,
@@ -162,7 +162,7 @@ static int hw_id_to_phone_mic_source(int hw_id)
 }
 
 /* temp usage */
-static int aoc_audio_stream_type[] = {
+static aoc_audio_stream_type[] = {
 	[0] = MMAPED,  [1] = NORMAL,   [2] = NORMAL,	   [3] = NORMAL,  [4] = NORMAL,
 	[5] = NORMAL,  [6] = COMPRESS, [7] = NORMAL,	   [8] = NORMAL,  [9] = MMAPED,
 	[10] = RAW,    [11] = NORMAL,  [12] = NORMAL,	   [13] = NORMAL, [14] = NORMAL,
@@ -421,6 +421,10 @@ int aoc_audio_capture_mic_prepare(struct aoc_chip *chip)
 		err = EINVAL;
 		goto exit;
 	}
+
+	/* Update mask before start capture */
+	if (mic_input_source == AP_INPUT_PROCESSOR_MIC_INPUT_INDEX)
+		aoc_audio_mic_mask_set(chip, false);
 
 	// CMD_AUDIO_INPUT_AP_INPUT_START_ID with mic_input_source
 	pr_info("mic_input_source = %d\n", mic_input_source);
@@ -2164,22 +2168,25 @@ int aoc_audio_capture_eraser_enable(struct aoc_chip *chip, long enable)
 	return 0;
 }
 
-#if ! IS_ENABLED(CONFIG_SOC_GS101)
 int aoc_hotword_tap_enable(struct aoc_chip *chip, long enable)
 {
-	int cmd_id, err = 0;
+	if (chip->hotword_supported) {
+		int cmd_id, err = 0;
 
-	cmd_id = (enable == 1) ? CMD_AUDIO_INPUT_HOTWORD_ENABLE_HOTWORD_TAP_ID :
-				       CMD_AUDIO_INPUT_HOTWORD_DISABLE_HOTWORD_TAP_ID;
-	err = aoc_audio_control_simple_cmd(CMD_INPUT_CHANNEL, cmd_id, chip);
-	if (err < 0) {
-		pr_err("ERR:%d in hotword tap %s\n", err, (enable) ? "enable" : "disable");
-		return err;
+		cmd_id = (enable == 1) ? CMD_AUDIO_INPUT_HOTWORD_ENABLE_HOTWORD_TAP_ID :
+						CMD_AUDIO_INPUT_HOTWORD_DISABLE_HOTWORD_TAP_ID;
+		err = aoc_audio_control_simple_cmd(CMD_INPUT_CHANNEL, cmd_id, chip);
+		if (err < 0) {
+			pr_err("ERR:%d in hotword tap %s\n", err, (enable) ? "enable" : "disable");
+			return err;
+		}
+
+		return 0;
+	} else {
+		pr_err("WARN:hotword is not supported on this device\n");
+		return 0;
 	}
-
-	return 0;
 }
-#endif
 
 int aoc_load_cca_module(struct aoc_chip *chip, long load)
 {
@@ -2841,8 +2848,6 @@ int aoc_audio_set_params(struct aoc_alsa_stream *alsa_stream, uint32_t channels,
 			 uint32_t samplerate, uint32_t bps, bool pcm_float_fmt, int source_mode)
 {
 	int err = 0;
-	struct aoc_chip *chip = alsa_stream->chip;
-
 	pr_debug("setting channels(%u), samplerate(%u), bits-per-sample(%u)\n", channels,
 		 samplerate, bps);
 
@@ -2857,13 +2862,6 @@ int aoc_audio_set_params(struct aoc_alsa_stream *alsa_stream, uint32_t channels,
 		if (err < 0) {
 			pr_err("ERR:%d capture audio param set fails\n", err);
 			goto exit;
-		}
-
-		/* To deal with recording with spatial module enabled */
-		if (chip->mic_spatial_module_enable && !aoc_pcm_is_mmap_raw(alsa_stream)) {
-			err = aoc_audio_capture_spatial_module_trigger(chip, START);
-			if (err < 0)
-				pr_err("ERR:%d mic proc spatial module failed to start!\n", err);
 		}
 	}
 
@@ -3020,6 +3018,12 @@ static int aoc_telephony_mic_open(struct aoc_chip *chip, int mic)
 	}
 
 	mic_input_source = hw_id_to_phone_mic_source(mic);
+
+	/* Update mask before start capture */
+	if (mic_input_source == MODEM_MIC_INPUT_INDEX ||
+		mic_input_source == MODEM_INCALL_INPUT_INDEX)
+		aoc_audio_mic_mask_set(chip, true);
+
 	pr_info("open telephony mic: %d - %d\n", mic_input_source, mic);
 	if (mic_input_source != NULL_PATH) {
 		err = aoc_audio_modem_mic_input(chip, START, mic_input_source);
@@ -3631,7 +3635,6 @@ int aoc_audio_open(struct aoc_alsa_stream *alsa_stream)
 
 int aoc_audio_close(struct aoc_alsa_stream *alsa_stream)
 {
-	int err = 0;
 	struct aoc_chip *chip = alsa_stream->chip;
 	struct snd_pcm_substream *substream = alsa_stream->substream;
 
@@ -3640,14 +3643,6 @@ int aoc_audio_close(struct aoc_alsa_stream *alsa_stream)
 		if (alsa_stream->idx == UC_ULTRASONIC_RECORD)
 			ap_record_stop(chip, alsa_stream);
 		else if (ap_filter_capture_stream(alsa_stream)) {
-			/* Disable spatial module */
-			if (chip->mic_spatial_module_enable && !aoc_pcm_is_mmap_raw(alsa_stream)) {
-				err = aoc_audio_capture_spatial_module_trigger(chip, STOP);
-				if (err < 0)
-					pr_err("ERR:%d mic proc spatial module failed to stop!\n",
-					       err);
-			}
-
 			/* Stop the capturing mic*/
 			if (aoc_audio_capture_active_stream_num(chip) == 0) {
 				pr_info("%s: record stop\n", __func__);
@@ -3723,66 +3718,83 @@ int aoc_audio_set_chirp_parameter(struct aoc_chip *chip, int key, int value)
 
 int aoc_audio_set_chre_src_pdm_gain(struct aoc_chip *chip, int gain)
 {
-#if ! IS_ENABLED(CONFIG_SOC_GS101)
-	int err;
-	struct CMD_AUDIO_INPUT_SET_CHRE_SRC_PDM_GAIN cmd;
+	if (chip->chre_supported) {
+		int err;
+		struct CMD_AUDIO_INPUT_SET_CHRE_SRC_PDM_GAIN cmd;
 
-	AocCmdHdrSet(&cmd.parent, CMD_AUDIO_INPUT_SET_CHRE_SRC_PDM_GAIN_ID,
-		     sizeof(cmd));
-	cmd.gain_centibel = gain;
+		AocCmdHdrSet(&cmd.parent, CMD_AUDIO_INPUT_SET_CHRE_SRC_PDM_GAIN_ID,
+				sizeof(cmd));
+		cmd.gain_centibel = gain;
 
-	err = aoc_audio_control(CMD_INPUT_CHANNEL, (uint8_t *)&cmd,
-				sizeof(cmd), (uint8_t *)&cmd, chip);
-	if (err < 0)
-		pr_err("ERR:%d in AoC Set CHRE PDM gain\n", err);
+		err = aoc_audio_control(CMD_INPUT_CHANNEL, (uint8_t *)&cmd,
+					sizeof(cmd), (uint8_t *)&cmd, chip);
+		if (err < 0)
+			pr_err("ERR:%d in AoC Set CHRE PDM gain\n", err);
 
-	return err < 0 ? err : 0;
-#else
-	pr_err("WARN: setting CHRE PDM gain is not supported\n");
-	return 0;
-#endif
+		return err < 0 ? err : 0;
+	} else {
+		pr_err("WARN: setting CHRE PDM gain is not supported\n");
+		return 0;
+	}
 }
 
 int aoc_audio_set_chre_src_aec_gain(struct aoc_chip *chip, int gain)
 {
-#if ! IS_ENABLED(CONFIG_SOC_GS101)
-	int err;
-	struct CMD_AUDIO_INPUT_SET_CHRE_SRC_AEC_GAIN cmd;
+	if (chip->chre_supported) {
+		int err;
+		struct CMD_AUDIO_INPUT_SET_CHRE_SRC_AEC_GAIN cmd;
 
-	AocCmdHdrSet(&cmd.parent, CMD_AUDIO_INPUT_SET_CHRE_SRC_AEC_GAIN_ID,
-		     sizeof(cmd));
-	cmd.gain_centibel = gain;
+		AocCmdHdrSet(&cmd.parent, CMD_AUDIO_INPUT_SET_CHRE_SRC_AEC_GAIN_ID,
+				sizeof(cmd));
+		cmd.gain_centibel = gain;
 
-	err = aoc_audio_control(CMD_INPUT_CHANNEL, (uint8_t *)&cmd,
-				sizeof(cmd), (uint8_t *)&cmd, chip);
-	if (err < 0)
-		pr_err("ERR:%d in AoC Set CHRE AEC gain\n", err);
+		err = aoc_audio_control(CMD_INPUT_CHANNEL, (uint8_t *)&cmd,
+					sizeof(cmd), (uint8_t *)&cmd, chip);
+		if (err < 0)
+			pr_err("ERR:%d in AoC Set CHRE AEC gain\n", err);
 
-	return err < 0 ? err : 0;
-#else
-	pr_err("WARN: setting CHRE AEC gain is not supported\n");
-	return 0;
-#endif
+		return err < 0 ? err : 0;
+	} else {
+		pr_err("WARN: setting CHRE AEC gain is not supported\n");
+		return 0;
+	}
 }
 
 int aoc_audio_set_chre_src_aec_timeout(struct aoc_chip *chip, int timeout)
 {
-#if ! IS_ENABLED(CONFIG_SOC_GS101)
-	int err;
-	struct CMD_AUDIO_INPUT_SET_CHRE_SRC_AEC_TIMEOUT cmd;
+	if (chip->chre_supported) {
+		int err;
+		struct CMD_AUDIO_INPUT_SET_CHRE_SRC_AEC_TIMEOUT cmd;
 
-	AocCmdHdrSet(&cmd.parent, CMD_AUDIO_INPUT_SET_CHRE_SRC_AEC_TIMEOUT_ID,
-		     sizeof(cmd));
-	cmd.timeout_ms = timeout;
+		AocCmdHdrSet(&cmd.parent, CMD_AUDIO_INPUT_SET_CHRE_SRC_AEC_TIMEOUT_ID,
+				sizeof(cmd));
+		cmd.timeout_ms = timeout;
 
-	err = aoc_audio_control(CMD_INPUT_CHANNEL, (uint8_t *)&cmd,
-				sizeof(cmd), (uint8_t *)&cmd, chip);
-	if (err < 0)
-		pr_err("ERR:%d in AoC Set CHRE timeout\n", err);
+		err = aoc_audio_control(CMD_INPUT_CHANNEL, (uint8_t *)&cmd,
+					sizeof(cmd), (uint8_t *)&cmd, chip);
+		if (err < 0)
+			pr_err("ERR:%d in AoC Set CHRE timeout\n", err);
 
-	return err < 0 ? err : 0;
-#else
-	pr_err("WARN: setting CHRE AEC gain is not supported\n");
-	return 0;
-#endif
+		return err < 0 ? err : 0;
+	} else {
+		pr_err("WARN: setting CHRE AEC gain is not supported\n");
+		return 0;
+	}
+}
+
+/* Update PDM mic mask */
+int aoc_audio_mic_mask_set(struct aoc_chip *chip, bool is_voice)
+{
+	uint32_t value = UINT_MAX;
+	uint8_t *mask = (uint8_t *)(&value);
+	int key = is_voice, i;
+	const int cmd_id = CMD_AUDIO_INPUT_SET_PARAMETER_ID;
+	const int block = 139; /* ABLOCK_INPUT_PDM_MIC */
+	const int component = ASP_ID_NONE;
+	const int total_lists = min(NUM_OF_BUILTIN_MIC, (int)sizeof(uint32_t));
+
+	for (i = 0; i < total_lists; i++)
+		mask[i] = chip->buildin_mic_id_list[i];
+
+	return aoc_audio_set_parameters(cmd_id, block, component, key, value, chip);
 }

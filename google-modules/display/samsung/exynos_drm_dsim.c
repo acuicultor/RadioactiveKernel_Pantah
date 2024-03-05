@@ -63,6 +63,7 @@
 #include "exynos_drm_crtc.h"
 #include "exynos_drm_decon.h"
 #include "exynos_drm_dsim.h"
+#include "panel/panel-samsung-drv.h"
 
 struct dsim_device *dsim_drvdata[MAX_DSI_CNT];
 
@@ -1038,7 +1039,7 @@ out:
 
 #else
 
-static void dsim_of_get_pll_diags(struct dsim_device *dsim)
+static void dsim_of_get_pll_diags(struct dsim_device * /* dsim */)
 {
 }
 
@@ -1251,12 +1252,12 @@ static void dsim_encoder_early_unregister(struct drm_encoder *encoder)
 
 #else
 
-static int dsim_encoder_late_register(struct drm_encoder *encoder)
+static int dsim_encoder_late_register(struct drm_encoder * /* encoder */)
 {
         return 0;
 }
 
-static void dsim_encoder_early_unregister(struct drm_encoder *encoder)
+static void dsim_encoder_early_unregister(struct drm_encoder * /*encoder */)
 {
 }
 
@@ -1920,8 +1921,10 @@ static int dsim_wait_for_cmd_fifo_empty(struct dsim_device *dsim, bool is_long)
 
 	ret |= __dsim_wait_for_ph_fifo_empty(dsim);
 
-	if (ret)
+	if (ret) {
+		dsim_warn(dsim, "failed on wait for cmd fifo empty (%d)\n", ret);
 		dsim_dump(dsim);
+	}
 
 	DPU_ATRACE_END(__func__);
 	return ret;
@@ -1995,10 +1998,8 @@ static void __dsim_cmd_prepare(struct dsim_device *dsim)
 	reinit_completion(&dsim->pl_wr_comp);
 }
 
-static int dsim_cmd_packetgo_flush_locked(struct dsim_device *dsim)
+static void dsim_cmd_packetgo_ready_locked(struct dsim_device *dsim)
 {
-	int ret;
-
 	/* this should only be called with pending packets */
 	WARN_ON(!dsim->total_pend_ph);
 
@@ -2007,27 +2008,18 @@ static int dsim_cmd_packetgo_flush_locked(struct dsim_device *dsim)
 	dsim_reg_ready_packetgo(dsim->id, true);
 	dsim_debug(dsim, "packet go ready (ph: %d, pl: %d)\n", dsim->total_pend_ph,
 		   dsim->total_pend_pl);
-
-	ret = dsim_wait_for_cmd_fifo_empty(dsim, dsim->total_pend_pl > 0);
-	if (ret)
-		dsim_warn(dsim, "packetgo failed on wait for cmd fifo empty (%d)\n", ret);
-
-	/* clear packetgo pending (even if it timed out) */
-	__dsim_cmd_packetgo_enable_locked(dsim, false);
-
-	return ret;
 }
 
-static int dsim_write_single_cmd_locked(struct dsim_device *dsim,
+static void dsim_write_single_cmd_locked(struct dsim_device *dsim,
 					const struct mipi_dsi_packet *packet)
 {
 	WARN_ON(dsim_cmd_packetgo_is_enabled(dsim));
 
+	dsim->total_pend_pl = ALIGN(packet->payload_length, 4);
+
 	__dsim_cmd_prepare(dsim);
 
 	__dsim_cmd_write_locked(dsim, packet);
-
-	return dsim_wait_for_cmd_fifo_empty(dsim, packet->payload_length > 0);
 }
 
 /*
@@ -2094,6 +2086,11 @@ static int dsim_write_data_locked(struct dsim_device *dsim, const struct mipi_ds
 	const u16 flags = msg->flags;
 	bool is_last;
 	struct mipi_dsi_packet packet = { .size = 0 };
+	const struct drm_bridge *bridge = dsim->panel_bridge;
+	struct exynos_panel *panel = bridge ?
+		container_of((bridge), struct exynos_panel, bridge) : NULL;
+	const struct exynos_panel_funcs *funcs = (panel && panel->desc) ?
+		panel->desc->exynos_panel_func : NULL;
 
 	WARN_ON(!mutex_is_locked(&dsim->cmd_lock));
 
@@ -2111,11 +2108,12 @@ static int dsim_write_data_locked(struct dsim_device *dsim, const struct mipi_ds
 	DPU_ATRACE_BEGIN(__func__);
 
 	if (dsim->config.mode == DSIM_VIDEO_MODE) {
+		is_last = true;
 		if (flags & (EXYNOS_DSI_MSG_FORCE_BATCH | EXYNOS_DSI_MSG_FORCE_FLUSH))
 			dsim_warn(dsim, "force batching is attempted in video mode\n");
 		if (packet.size)
-			ret = dsim_write_single_cmd_locked(dsim, &packet);
-		goto err;
+			dsim_write_single_cmd_locked(dsim, &packet);
+		goto trace_dsi_cmd;
 	}
 
 	if (flags & EXYNOS_DSI_MSG_FORCE_BATCH) {
@@ -2150,9 +2148,6 @@ static int dsim_write_data_locked(struct dsim_device *dsim, const struct mipi_ds
 		is_last = true;
 	}
 
-	trace_dsi_tx(msg->type, msg->tx_buf, msg->tx_len, is_last);
-	dsim_debug(dsim, "%s last command\n", is_last ? "" : "Not");
-
 	if (is_last) {
 		if (dsim_cmd_packetgo_is_enabled(dsim)) {
 			if (packet.size > 0)
@@ -2161,18 +2156,23 @@ static int dsim_write_data_locked(struct dsim_device *dsim, const struct mipi_ds
 			if (!(flags & EXYNOS_DSI_MSG_IGNORE_VBLANK))
 				need_wait_vblank(dsim);
 
-			ret = dsim_cmd_packetgo_flush_locked(dsim);
+			dsim_cmd_packetgo_ready_locked(dsim);
 		} else if (packet.size > 0) {
-			ret = dsim_write_single_cmd_locked(dsim, &packet);
+			dsim_write_single_cmd_locked(dsim, &packet);
 		}
 	} else if (packet.size > 0) {
 		dsim_cmd_packetgo_queue_locked(dsim, &packet);
 	}
 
+trace_dsi_cmd:
+	trace_dsi_tx(msg->type, msg->tx_buf, msg->tx_len, is_last);
+	dsim_debug(dsim, "%s last command\n", is_last ? "" : "Not");
+	if (funcs && funcs->on_queue_ddic_cmd)
+		funcs->on_queue_ddic_cmd(panel, msg, is_last);
 err:
 	trace_dsi_cmd_fifo_status(dsim->total_pend_ph, dsim->total_pend_pl);
 	DPU_ATRACE_END(__func__);
-	return ret;
+	return ret ? : is_last;
 }
 
 static int
@@ -2292,6 +2292,17 @@ dsim_read_data(struct dsim_device *dsim, const struct mipi_dsi_msg *msg)
 	return rx_size;
 }
 
+static int dsim_cmd_flush_locked(struct dsim_device *dsim)
+{
+	int ret;
+
+	ret = dsim_wait_for_cmd_fifo_empty(dsim, dsim->total_pend_pl > 0);
+	if (dsim_cmd_packetgo_is_enabled(dsim))
+		__dsim_cmd_packetgo_enable_locked(dsim, false);
+
+	return ret;
+}
+
 static int
 dsim_write_data_dual(struct dsim_device *dsim, const struct mipi_dsi_msg *msg)
 {
@@ -2306,6 +2317,8 @@ dsim_write_data_dual(struct dsim_device *dsim, const struct mipi_dsi_msg *msg)
 	mutex_lock(&dsim->cmd_lock);
 
 	ret = dsim_write_data_locked(dsim, msg);
+	if (ret == 1) // is_last
+		ret = dsim_cmd_flush_locked(dsim);
 
 	mutex_unlock(&dsim->cmd_lock);
 
@@ -2314,6 +2327,7 @@ dsim_write_data_dual(struct dsim_device *dsim, const struct mipi_dsi_msg *msg)
 
 	return ret;
 }
+
 static ssize_t dsim_host_transfer(struct mipi_dsi_host *host,
 			    const struct mipi_dsi_msg *msg)
 {
@@ -2347,10 +2361,12 @@ static ssize_t dsim_host_transfer(struct mipi_dsi_host *host,
 		if (dsim->dual_dsi == DSIM_DUAL_DSI_MAIN) {
 			sec_dsi = exynos_get_dual_dsi(DSIM_DUAL_DSI_SEC);
 			if (sec_dsi)
-				ret = dsim_write_data_dual(sec_dsi, msg);
+				dsim_write_data_dual(sec_dsi, msg);
 			else
 				dsim_err(dsim, "could not get secondary dsi\n");
 		}
+		if (ret == 1) // is_last
+			ret = dsim_cmd_flush_locked(dsim);
 		break;
 	}
 

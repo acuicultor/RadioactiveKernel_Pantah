@@ -6132,17 +6132,6 @@ wl_do_preassoc_ops(struct bcm_cfg80211 *cfg,
 		wl_restore_ap_bw(cfg);
 	}
 #endif /* SUPPORT_AP_BWCTRL */
-#if defined(ROAMEXP_SUPPORT)
-	/* Clear Blacklist bssid and Whitelist ssid list before join issue
-	 * This is temporary fix since currently firmware roaming is not
-	 * disabled by android framework before SSID join from framework
-	*/
-	/* Flush blacklist bssid content */
-	dhd_dev_set_blacklist_bssid(dev, NULL, 0, true);
-	/* Flush whitelist ssid content */
-	dhd_dev_set_whitelist_ssid(dev, NULL, 0, true);
-#endif /* ROAMEXP_SUPPORT */
-
 	WL_DBG(("SME IE : len=%zu\n", sme->ie_len));
 	if (sme->ie != NULL && sme->ie_len > 0 && (wl_dbg_level & WL_DBG_DBG)) {
 		prhex(NULL, sme->ie, sme->ie_len);
@@ -12844,6 +12833,13 @@ wl_post_linkdown_ops(struct bcm_cfg80211 *cfg,
 		wl_android_set_tid(ndev, cmd);
 	}
 #endif /* SUPPORT_SET_TID */
+
+#if defined(ROAMEXP_SUPPORT)
+	/* Flush blacklist bssid content */
+	wl_android_set_blacklist_bssid(ndev, NULL, 0, TRUE);
+	/* Flush whitelist ssid content */
+	wl_android_set_whitelist_ssid(ndev, NULL, 0, TRUE);
+#endif /* ROAMEXP_SUPPORT */
 
 	return ret;
 }
@@ -20435,12 +20431,12 @@ void wl_cfg80211_enable_trace(bool set, u32 level)
 		wl_dbg_level |= (WL_DBG_LEVEL & level);
 }
 
-uint32 wl_cfg80211_get_print_level(void)
+uint32 wl_cfg80211_get_print_level()
 {
 	return wl_dbg_level;
 }
 
-uint32 wl_cfg80211_get_log_level(void)
+uint32 wl_cfg80211_get_log_level()
 {
 	return wl_log_level;
 }
@@ -25722,7 +25718,7 @@ int wl_get_usable_channels(struct bcm_cfg80211 *cfg, usable_channel_info_t *u_in
 		}
 
 		/* Supplicant does scan passive channel but not for DFS channel */
-		if (!(chaninfo & WL_CHAN_RADAR) && !ch_160mhz_5g &&
+		if (!restrict_chan && !ch_160mhz_5g &&
 			!CHSPEC_IS6G(chspec) && (!is_unii4)) {
 			mask |= (1 << WIFI_INTERFACE_P2P_CLIENT);
 		}

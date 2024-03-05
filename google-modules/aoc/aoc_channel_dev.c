@@ -56,9 +56,10 @@ static DEFINE_MUTEX(aocc_write_lock);
 static DEFINE_MUTEX(s_open_files_lock);
 
 #define AOCC_MAX_MSG_SIZE 1024
-#define AOCC_MAX_PENDING_MSGS 128
-#define AOCC_BLOCK_CHANNEL_THRESHOLD 64
 static atomic_t channel_index_counter = ATOMIC_INIT(1);
+
+static u32 aocc_max_pending_msgs;
+static u32 aocc_block_channel_threshold;
 
 /* Driver methods */
 static int aocc_probe(struct aoc_service_dev *dev);
@@ -69,6 +70,8 @@ static const char * const channel_service_names[] = {
 	"com.google.usf.non_wake_up",
 	"com.google.chre",
 	"com.google.chre.non_wake_up",
+	"com.google.bt",
+	"com.google.bt.non_wake_up",
 	"usf_sh_mem_doorbell",
 	NULL,
 };
@@ -208,15 +211,16 @@ static int aocc_demux_kthread(void *data)
 				handler_found = 1;
 				if (!node->msg.non_wake_up &&
 				    (strcmp(dev_name(&service->dev),"com.google.usf") == 0 ||
-				     strcmp(dev_name(&service->dev),"com.google.chre") == 0)) {
+				     strcmp(dev_name(&service->dev),"com.google.chre") == 0 ||
+				     strcmp(dev_name(&service->dev),"com.google.bt") == 0)) {
 					take_wake_lock = true;
 				}
 
 				if (atomic_read(&entry->pending_msg_count) >
-				    AOCC_MAX_PENDING_MSGS) {
+				    aocc_max_pending_msgs) {
 					pr_err_ratelimited(
 						"Too many pending messages on channel %d.  More than %d allocated",
-						channel, AOCC_MAX_PENDING_MSGS);
+						channel, aocc_max_pending_msgs);
 					kfree(node);
 					break;
 				}
@@ -227,7 +231,7 @@ static int aocc_demux_kthread(void *data)
 					      &entry->pending_aoc_messages);
 				atomic_inc(&entry->pending_msg_count);
 				if (atomic_read(&entry->pending_msg_count) >
-				    AOCC_BLOCK_CHANNEL_THRESHOLD &&
+				    aocc_block_channel_threshold &&
 				    !entry->is_channel_blocked) {
 					rc = aocc_send_cmd_msg(service,
 						AOCC_CMD_BLOCK_CHANNEL, channel);
@@ -600,7 +604,7 @@ static ssize_t aocc_read(struct file *file, char __user *buf, size_t count,
 	list_del(&node->msg_list);
 	atomic_dec(&private->pending_msg_count);
 	if (atomic_read(&private->pending_msg_count) <
-	    AOCC_BLOCK_CHANNEL_THRESHOLD && private->is_channel_blocked) {
+	    aocc_block_channel_threshold && private->is_channel_blocked) {
 		rc = aocc_send_cmd_msg(private->aocc_device_entry->service,
 				       AOCC_CMD_UNBLOCK_CHANNEL, private->channel_index);
 		if (rc >= 0)
@@ -772,6 +776,18 @@ static int aocc_probe(struct aoc_service_dev *dev)
 	prvdata = devm_kzalloc(&dev->dev, sizeof(*prvdata), GFP_KERNEL);
 	if (!prvdata)
 		return -ENOMEM;
+
+	aocc_max_pending_msgs = dt_property(dev->dev.parent->of_node, "channel-max-pending-msgs");
+	if (aocc_max_pending_msgs == DT_PROPERTY_NOT_FOUND) {
+		dev_err(&dev->dev, "AOC DT missing property channel-max-pending-msgs");
+		return -EINVAL;
+	}
+	aocc_block_channel_threshold = dt_property(dev->dev.parent->of_node,
+						"block-channel-threshold");
+	if (aocc_block_channel_threshold == DT_PROPERTY_NOT_FOUND) {
+		dev_err(&dev->dev, "AOC DT missing property block_channel_threshold");
+		return -EINVAL;
+	}
 
 	if (strcmp(dev_name(&dev->dev), "usf_sh_mem_doorbell") != 0) {
 		ret = create_character_device(dev);

@@ -431,7 +431,7 @@ struct kbase_va_region *kbase_mem_alloc(struct kbase_context *kctx, u64 va_pages
 	}
 	reg->initial_commit = commit_pages;
 
-	kbase_gpu_vm_lock(kctx);
+	kbase_gpu_vm_lock_with_pmode_sync(kctx);
 
 	if (reg->flags & KBASE_REG_PERMANENT_KERNEL_MAPPING) {
 		/* Permanent kernel mappings must happen as soon as
@@ -442,7 +442,7 @@ struct kbase_va_region *kbase_mem_alloc(struct kbase_context *kctx, u64 va_pages
 		int err = kbase_phy_alloc_mapping_init(kctx, reg, va_pages,
 				commit_pages);
 		if (err < 0) {
-			kbase_gpu_vm_unlock(kctx);
+			kbase_gpu_vm_unlock_with_pmode_sync(kctx);
 			goto no_kern_mapping;
 		}
 	}
@@ -454,7 +454,7 @@ struct kbase_va_region *kbase_mem_alloc(struct kbase_context *kctx, u64 va_pages
 		/* Bind to a cookie */
 		if (bitmap_empty(kctx->cookies, BITS_PER_LONG)) {
 			dev_err(dev, "No cookies available for allocation!");
-			kbase_gpu_vm_unlock(kctx);
+			kbase_gpu_vm_unlock_with_pmode_sync(kctx);
 			goto no_cookie;
 		}
 		/* return a cookie */
@@ -490,7 +490,7 @@ struct kbase_va_region *kbase_mem_alloc(struct kbase_context *kctx, u64 va_pages
 		if (kbase_gpu_mmap(kctx, reg, *gpu_va, va_pages, align,
 				   mmu_sync_info) != 0) {
 			dev_warn(dev, "Failed to map memory on GPU");
-			kbase_gpu_vm_unlock(kctx);
+			kbase_gpu_vm_unlock_with_pmode_sync(kctx);
 			goto no_mmap;
 		}
 		/* return real GPU VA */
@@ -508,7 +508,7 @@ struct kbase_va_region *kbase_mem_alloc(struct kbase_context *kctx, u64 va_pages
 	}
 #endif /* MALI_JIT_PRESSURE_LIMIT_BASE */
 
-	kbase_gpu_vm_unlock(kctx);
+	kbase_gpu_vm_unlock_with_pmode_sync(kctx);
 
 #if MALI_USE_CSF
 	if (*flags & BASE_MEM_FIXABLE)
@@ -722,6 +722,13 @@ unsigned long kbase_mem_evictable_reclaim_scan_objects(struct shrinker *s,
 
 	kctx = container_of(s, struct kbase_context, reclaim);
 
+#if MALI_USE_CSF
+	if (!down_read_trylock(&kctx->kbdev->csf.pmode_sync_sem)) {
+		dev_warn(kctx->kbdev->dev,
+			 "Can't shrink GPU memory when P.Mode entrance is in progress");
+		return 0;
+	}
+#endif
 	mutex_lock(&kctx->jit_evict_lock);
 
 	list_for_each_entry_safe(alloc, tmp, &kctx->evict_list, evict_node) {
@@ -761,7 +768,9 @@ unsigned long kbase_mem_evictable_reclaim_scan_objects(struct shrinker *s,
 	}
 
 	mutex_unlock(&kctx->jit_evict_lock);
-
+#if MALI_USE_CSF
+	up_read(&kctx->kbdev->csf.pmode_sync_sem);
+#endif
 	return freed;
 }
 
@@ -973,7 +982,7 @@ int kbase_mem_flags_change(struct kbase_context *kctx, u64 gpu_addr, unsigned in
 
 	/* now we can lock down the context, and find the region */
 	down_write(kbase_mem_get_process_mmap_lock());
-	kbase_gpu_vm_lock(kctx);
+	kbase_gpu_vm_lock_with_pmode_sync(kctx);
 
 	/* Validate the region */
 	reg = kbase_region_tracker_find_region_base_address(kctx, gpu_addr);
@@ -1086,7 +1095,7 @@ int kbase_mem_flags_change(struct kbase_context *kctx, u64 gpu_addr, unsigned in
 		reg->flags = new_flags;
 
 out_unlock:
-	kbase_gpu_vm_unlock(kctx);
+	kbase_gpu_vm_unlock_with_pmode_sync(kctx);
 	up_write(kbase_mem_get_process_mmap_lock());
 out:
 	return ret;
@@ -1885,7 +1894,7 @@ u64 kbase_mem_alias(struct kbase_context *kctx, u64 *flags, u64 stride,
 	if (!reg->gpu_alloc->imported.alias.aliased)
 		goto no_aliased_array;
 
-	kbase_gpu_vm_lock(kctx);
+	kbase_gpu_vm_lock_with_pmode_sync(kctx);
 
 	/* validate and add src handles */
 	for (i = 0; i < nents; i++) {
@@ -1997,7 +2006,7 @@ u64 kbase_mem_alias(struct kbase_context *kctx, u64 *flags, u64 stride,
 	reg->flags &= ~KBASE_REG_FREE;
 	reg->flags &= ~KBASE_REG_GROWABLE;
 
-	kbase_gpu_vm_unlock(kctx);
+	kbase_gpu_vm_unlock_with_pmode_sync(kctx);
 
 	return gpu_va;
 
@@ -2008,7 +2017,7 @@ bad_handle:
 	 * them is handled by putting reg's allocs, so no rollback of those
 	 * actions is done here.
 	 */
-	kbase_gpu_vm_unlock(kctx);
+	kbase_gpu_vm_unlock_with_pmode_sync(kctx);
 no_aliased_array:
 invalid_flags:
 	kbase_mem_phy_alloc_put(reg->cpu_alloc);
@@ -2119,7 +2128,7 @@ int kbase_mem_import(struct kbase_context *kctx, enum base_mem_import_type type,
 	if (!reg)
 		goto no_reg;
 
-	kbase_gpu_vm_lock(kctx);
+	kbase_gpu_vm_lock_with_pmode_sync(kctx);
 
 	/* mmap needed to setup VA? */
 	if (*flags & (BASE_MEM_SAME_VA | BASE_MEM_NEED_MMAP)) {
@@ -2154,13 +2163,13 @@ int kbase_mem_import(struct kbase_context *kctx, enum base_mem_import_type type,
 	/* clear out private flags */
 	*flags &= ((1UL << BASE_MEM_FLAGS_NR_BITS) - 1);
 
-	kbase_gpu_vm_unlock(kctx);
+	kbase_gpu_vm_unlock_with_pmode_sync(kctx);
 
 	return 0;
 
 no_gpu_va:
 no_cookie:
-	kbase_gpu_vm_unlock(kctx);
+	kbase_gpu_vm_unlock_with_pmode_sync(kctx);
 	kbase_mem_phy_alloc_put(reg->cpu_alloc);
 	kbase_mem_phy_alloc_put(reg->gpu_alloc);
 	kfree(reg);
@@ -2243,7 +2252,7 @@ int kbase_mem_commit(struct kbase_context *kctx, u64 gpu_addr, u64 new_pages)
 	}
 
 	down_write(kbase_mem_get_process_mmap_lock());
-	kbase_gpu_vm_lock(kctx);
+	kbase_gpu_vm_lock_with_pmode_sync(kctx);
 
 	/* Validate the region */
 	reg = kbase_region_tracker_find_region_base_address(kctx, gpu_addr);
@@ -2347,7 +2356,7 @@ int kbase_mem_commit(struct kbase_context *kctx, u64 gpu_addr, u64 new_pages)
 	}
 
 out_unlock:
-	kbase_gpu_vm_unlock(kctx);
+	kbase_gpu_vm_unlock_with_pmode_sync(kctx);
 	if (read_locked)
 		up_read(kbase_mem_get_process_mmap_lock());
 	else
@@ -2432,7 +2441,7 @@ static void kbase_cpu_vm_close(struct vm_area_struct *vma)
 	KBASE_DEBUG_ASSERT(map->kctx);
 	KBASE_DEBUG_ASSERT(map->alloc);
 
-	kbase_gpu_vm_lock(map->kctx);
+	kbase_gpu_vm_lock_with_pmode_sync(map->kctx);
 
 	if (map->free_on_close) {
 		KBASE_DEBUG_ASSERT(kbase_bits_to_zone(map->region->flags) == SAME_VA_ZONE);
@@ -2446,7 +2455,7 @@ static void kbase_cpu_vm_close(struct vm_area_struct *vma)
 	list_del(&map->mappings_list);
 
 	kbase_va_region_alloc_put(map->kctx, map->region);
-	kbase_gpu_vm_unlock(map->kctx);
+	kbase_gpu_vm_unlock_with_pmode_sync(map->kctx);
 
 	kbase_mem_phy_alloc_put(map->alloc);
 	kbase_file_dec_cpu_mapping_count(map->kctx->kfile);
@@ -2866,7 +2875,7 @@ int kbase_context_mmap(struct kbase_context *const kctx,
 		goto out;
 	}
 
-	kbase_gpu_vm_lock(kctx);
+	kbase_gpu_vm_lock_with_pmode_sync(kctx);
 
 	if (vma->vm_pgoff == PFN_DOWN(BASE_MEM_MAP_TRACKING_HANDLE)) {
 		/* The non-mapped tracking helper page */
@@ -2901,12 +2910,12 @@ int kbase_context_mmap(struct kbase_context *const kctx,
 #endif /* defined(CONFIG_MALI_VECTOR_DUMP) */
 #if MALI_USE_CSF
 	case PFN_DOWN(BASEP_MEM_CSF_USER_REG_PAGE_HANDLE):
-		kbase_gpu_vm_unlock(kctx);
+		kbase_gpu_vm_unlock_with_pmode_sync(kctx);
 		err = kbase_csf_cpu_mmap_user_reg_page(kctx, vma);
 		goto out;
 	case PFN_DOWN(BASEP_MEM_CSF_USER_IO_PAGES_HANDLE) ...
 	     PFN_DOWN(BASE_MEM_COOKIE_BASE) - 1: {
-		kbase_gpu_vm_unlock(kctx);
+		kbase_gpu_vm_unlock_with_pmode_sync(kctx);
 		rt_mutex_lock(&kctx->csf.lock);
 		err = kbase_csf_cpu_mmap_user_io_pages(kctx, vma);
 		rt_mutex_unlock(&kctx->csf.lock);
@@ -3007,7 +3016,7 @@ int kbase_context_mmap(struct kbase_context *const kctx,
 	}
 #endif /* defined(CONFIG_MALI_VECTOR_DUMP) */
 out_unlock:
-	kbase_gpu_vm_unlock(kctx);
+	kbase_gpu_vm_unlock_with_pmode_sync(kctx);
 out:
 	if (err)
 		dev_err(dev, "mmap failed %d\n", err);

@@ -25,6 +25,7 @@
 #include "lwis_i2c.h"
 #include "lwis_ioreg.h"
 #include "lwis_regulator.h"
+#include "lwis_i2c_bus_manager.h"
 
 #define SHARED_STRING "shared-"
 #define PULSE_STRING "pulse-"
@@ -1165,6 +1166,33 @@ static int parse_thread_priority(struct lwis_device *lwis_dev)
 	return 0;
 }
 
+static int parse_i2c_device_priority(struct lwis_i2c_device *i2c_dev)
+{
+	struct device_node *dev_node;
+	int ret = 0;
+
+	dev_node = i2c_dev->base_dev.plat_dev->dev.of_node;
+	/* Set i2c device_priority value to default */
+	i2c_dev->device_priority = I2C_DEVICE_HIGH_PRIORITY;
+
+	ret = of_property_read_u32(dev_node, "i2c-device-priority", &i2c_dev->device_priority);
+	/* If no property in device tree, just return to use default */
+	if (ret == -EINVAL) {
+		return 0;
+	}
+	if (ret) {
+		pr_err("invalid i2c-device-priority value\n");
+		return ret;
+	}
+	if ((i2c_dev->device_priority < I2C_DEVICE_HIGH_PRIORITY) ||
+	    (i2c_dev->device_priority > I2C_DEVICE_LOW_PRIORITY)) {
+		pr_err("invalid i2c-device-priority value %d\n", i2c_dev->device_priority);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
 static int parse_i2c_lock_group_id(struct lwis_i2c_device *i2c_dev)
 {
 	struct device_node *dev_node;
@@ -1187,6 +1215,19 @@ static int parse_i2c_lock_group_id(struct lwis_i2c_device *i2c_dev)
 		pr_err("i2c-lock-group-id need smaller than MAX_I2C_LOCK_NUM - 1\n");
 		return -EOVERFLOW;
 	}
+
+	return 0;
+}
+
+static int parse_transaction_process_limit(struct lwis_device *lwis_dev)
+{
+	struct device_node *dev_node;
+
+	lwis_dev->transaction_process_limit = 0;
+	dev_node = lwis_dev->plat_dev->dev.of_node;
+
+	of_property_read_u32(dev_node, "transaction-process-limit",
+			     &lwis_dev->transaction_process_limit);
 
 	return 0;
 }
@@ -1321,6 +1362,7 @@ int lwis_base_parse_dt(struct lwis_device *lwis_dev)
 	parse_access_mode(lwis_dev);
 	parse_thread_priority(lwis_dev);
 	parse_bitwidths(lwis_dev);
+	parse_transaction_process_limit(lwis_dev);
 
 	lwis_dev->bts_scenario_name = NULL;
 	of_property_read_string(dev_node, "bts-scenario", &lwis_dev->bts_scenario_name);
@@ -1361,6 +1403,12 @@ int lwis_i2c_device_parse_dt(struct lwis_i2c_device *i2c_dev)
 	ret = parse_i2c_lock_group_id(i2c_dev);
 	if (ret) {
 		dev_err(i2c_dev->base_dev.dev, "Error parsing i2c lock group id\n");
+		return ret;
+	}
+
+	ret = parse_i2c_device_priority(i2c_dev);
+	if (ret) {
+		dev_err(i2c_dev->base_dev.dev, "Error parsing i2c device priority\n");
 		return ret;
 	}
 

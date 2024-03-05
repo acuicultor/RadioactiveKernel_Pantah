@@ -2845,6 +2845,7 @@ wl_cfgvendor_set_bssid_blacklist(struct wiphy *wiphy,
 					err = -EINVAL;
 					goto exit;
 				}
+				WL_INFORM_MEM(("blacklist_flush:%d\n", flush));
 				break;
 			case GSCAN_ATTRIBUTE_BLACKLIST_BSSID:
 				if (num == 0 || !blacklist) {
@@ -2863,8 +2864,9 @@ wl_cfgvendor_set_bssid_blacklist(struct wiphy *wiphy,
 					err = -EINVAL;
 					goto exit;
 				}
-				memcpy(&(blacklist->ea[blacklist->count]), nla_data(iter),
-						ETHER_ADDR_LEN);
+				WL_INFORM_MEM(("blacklist mac_addr:" MACDBG "\n",
+					MAC2STRDBG(nla_data(iter))));
+				eacopy(nla_data(iter), &(blacklist->ea[blacklist->count]));
 				blacklist->count++;
 				break;
 		default:
@@ -2880,8 +2882,8 @@ wl_cfgvendor_set_bssid_blacklist(struct wiphy *wiphy,
 		goto exit;
 	}
 
-	err = dhd_dev_set_blacklist_bssid(bcmcfg_to_prmry_ndev(cfg),
-	          blacklist, mem_needed, flush);
+	err = wl_android_set_blacklist_bssid(wdev_to_ndev(wdev), blacklist,
+		mem_needed, flush);
 exit:
 	MFREE(cfg->osh, blacklist, mem_needed);
 	return err;

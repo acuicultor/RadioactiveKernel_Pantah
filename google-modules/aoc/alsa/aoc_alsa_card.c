@@ -1806,6 +1806,7 @@ static int aoc_card_late_probe(struct snd_soc_card *card)
 static int snd_aoc_init(struct aoc_chip *chip)
 {
 	int i;
+	struct device_node *aoc_node;
 
 	chip->mic_loopback_enabled = 0;
 
@@ -1852,6 +1853,14 @@ static int snd_aoc_init(struct aoc_chip *chip)
 	mutex_init(&chip->audio_cmd_chan_mutex);
 	spin_lock_init(&chip->audio_lock);
 
+	aoc_node = of_find_compatible_node(NULL, NULL, "google,aoc");
+	if (!aoc_node)
+		pr_err("Cannot find aoc device node\n");
+
+	chip->hotword_supported = of_property_read_bool(aoc_node, "hotword-supported");
+	chip->chre_supported = of_property_read_bool(aoc_node, "chre-supported");
+
+	of_node_put(aoc_node);
 	return 0;
 }
 

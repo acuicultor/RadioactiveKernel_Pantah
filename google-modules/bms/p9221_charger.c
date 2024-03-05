@@ -2426,16 +2426,21 @@ static int p9221_set_psy_online(struct p9221_charger_data *charger, int online)
 			return -EOPNOTSUPP;
 		}
 
-		/* AUTH is passed remove the DC_ICL limit */
-		p9221_set_auth_dc_icl(charger, false);
 		mutex_unlock(&charger->auth_lock);
 
 		/* Check alignment before enabling proprietary mode */
 		ret = p9xxx_check_alignment(charger);
-		if (ret < 0)
+		if (ret < 0) {
+			p9221_set_auth_dc_icl(charger, false);
 			return ret;
+		}
 
+		/*
+		 * AUTH is passed, remove the DC_ICL limit and set ICL for
+		 * prepare HPP mode
+		 */
 		ret = p9221_set_hpp_dc_icl(charger, true);
+		ret |= p9221_set_auth_dc_icl(charger, false);
 		if (ret < 0)
 			dev_warn(&charger->client->dev, "Cannot enable HPP_ICL (%d)\n", ret);
 		mdelay(10);

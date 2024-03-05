@@ -2270,10 +2270,10 @@ static void kcpu_queue_process(struct kbase_kcpu_command_queue *queue,
 				KBASE_TLSTREAM_TL_KBASE_KCPUQUEUE_EXECUTE_MAP_IMPORT_START(kbdev,
 											   queue);
 
-				kbase_gpu_vm_lock(queue->kctx);
-				meta = kbase_sticky_resource_acquire(
-					queue->kctx, cmd->info.import.gpu_va);
-				kbase_gpu_vm_unlock(queue->kctx);
+				kbase_gpu_vm_lock_with_pmode_sync(queue->kctx);
+				meta = kbase_sticky_resource_acquire(queue->kctx,
+								     cmd->info.import.gpu_va);
+				kbase_gpu_vm_unlock_with_pmode_sync(queue->kctx);
 
 				if (meta == NULL) {
 					queue->has_error = true;
@@ -2292,10 +2292,10 @@ static void kcpu_queue_process(struct kbase_kcpu_command_queue *queue,
 
 			KBASE_TLSTREAM_TL_KBASE_KCPUQUEUE_EXECUTE_UNMAP_IMPORT_START(kbdev, queue);
 
-			kbase_gpu_vm_lock(queue->kctx);
-			ret = kbase_sticky_resource_release(
-				queue->kctx, NULL, cmd->info.import.gpu_va);
-			kbase_gpu_vm_unlock(queue->kctx);
+			kbase_gpu_vm_lock_with_pmode_sync(queue->kctx);
+			ret = kbase_sticky_resource_release(queue->kctx, NULL,
+							    cmd->info.import.gpu_va);
+			kbase_gpu_vm_unlock_with_pmode_sync(queue->kctx);
 
 			if (!ret) {
 				queue->has_error = true;
@@ -2313,10 +2313,10 @@ static void kcpu_queue_process(struct kbase_kcpu_command_queue *queue,
 			KBASE_TLSTREAM_TL_KBASE_KCPUQUEUE_EXECUTE_UNMAP_IMPORT_FORCE_START(kbdev,
 											   queue);
 
-			kbase_gpu_vm_lock(queue->kctx);
-			ret = kbase_sticky_resource_release_force(
-				queue->kctx, NULL, cmd->info.import.gpu_va);
-			kbase_gpu_vm_unlock(queue->kctx);
+			kbase_gpu_vm_lock_with_pmode_sync(queue->kctx);
+			ret = kbase_sticky_resource_release_force(queue->kctx, NULL,
+								  cmd->info.import.gpu_va);
+			kbase_gpu_vm_unlock_with_pmode_sync(queue->kctx);
 
 			if (!ret) {
 				queue->has_error = true;
@@ -2833,8 +2833,6 @@ int kbase_csf_kcpu_queue_new(struct kbase_context *kctx,
 		goto out;
 	}
 
-	bitmap_set(kctx->csf.kcpu_queues.in_use, idx, 1);
-	kctx->csf.kcpu_queues.array[idx] = queue;
 	mutex_init(&queue->lock);
 	queue->kctx = kctx;
 	queue->start_offset = 0;
@@ -2894,6 +2892,8 @@ int kbase_csf_kcpu_queue_new(struct kbase_context *kctx,
 	atomic_set(&queue->fence_signal_pending_cnt, 0);
 	kbase_timer_setup(&queue->fence_signal_timeout, fence_signal_timeout_cb);
 #endif
+	bitmap_set(kctx->csf.kcpu_queues.in_use, idx, 1);
+	kctx->csf.kcpu_queues.array[idx] = queue;
 out:
 	mutex_unlock(&kctx->csf.kcpu_queues.lock);
 

@@ -18,7 +18,8 @@ struct lwis_device;
 struct lwis_client;
 struct lwis_fence;
 
-/* Transaction entry. Each entry belongs to two queues:
+/*
+ * Transaction entry. Each entry belongs to two queues:
  * 1) Event list: Transactions are sorted by event IDs. This is to search for
  *    the appropriate transactions to trigger.
  * 2) Process queue: When it's time to process, the transaction will be put
@@ -47,6 +48,16 @@ struct lwis_transaction {
 	struct list_head completion_fence_list;
 	/* Precondition fence file pointer */
 	struct file *precondition_fence_fp;
+	/* If the transaction has more entries to process than the transaction_process_limit
+	   for the processing device, then this will save the number of entries that are
+	   remaining to be processed after a given transaction process cycle
+	*/
+	int remaining_entries_to_process;
+	/* Starting read buffer pointer is set to the last read location when the transaction
+	   process limit has reached. During the next run for the transaction, this pointer
+	   will be referred to correctly point to the read buffer for the run.
+	*/
+	uint8_t *starting_read_buf;
 };
 
 /* For debugging purposes, keeps track of the transaction information, as
@@ -81,7 +92,7 @@ void lwis_transaction_fence_trigger(struct lwis_client *client, struct lwis_fenc
 
 int lwis_transaction_cancel(struct lwis_client *client, int64_t id);
 
-void lwis_transaction_free(struct lwis_device *lwis_dev, struct lwis_transaction *transaction);
+void lwis_transaction_free(struct lwis_device *lwis_dev, struct lwis_transaction **ptransaction);
 
 /* Expects lwis_client->transaction_lock to be acquired before calling
  * the following functions. */

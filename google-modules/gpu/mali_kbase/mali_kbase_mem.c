@@ -2293,7 +2293,7 @@ int kbase_mem_free(struct kbase_context *kctx, u64 gpu_addr)
 			__func__);
 		return -EINVAL;
 	}
-	kbase_gpu_vm_lock(kctx);
+	kbase_gpu_vm_lock_with_pmode_sync(kctx);
 
 	if (gpu_addr >= BASE_MEM_COOKIE_BASE &&
 	    gpu_addr < BASE_MEM_FIRST_FREE_ADDRESS) {
@@ -2333,7 +2333,7 @@ int kbase_mem_free(struct kbase_context *kctx, u64 gpu_addr)
 	}
 
 out_unlock:
-	kbase_gpu_vm_unlock(kctx);
+	kbase_gpu_vm_unlock_with_pmode_sync(kctx);
 	return err;
 }
 
@@ -3478,16 +3478,30 @@ void kbase_gpu_vm_lock(struct kbase_context *kctx)
 	KBASE_DEBUG_ASSERT(kctx != NULL);
 	mutex_lock(&kctx->reg_lock);
 }
-
 KBASE_EXPORT_TEST_API(kbase_gpu_vm_lock);
+
+void kbase_gpu_vm_lock_with_pmode_sync(struct kbase_context *kctx)
+{
+#if MALI_USE_CSF
+	down_read(&kctx->kbdev->csf.pmode_sync_sem);
+#endif
+	kbase_gpu_vm_lock(kctx);
+}
 
 void kbase_gpu_vm_unlock(struct kbase_context *kctx)
 {
 	KBASE_DEBUG_ASSERT(kctx != NULL);
 	mutex_unlock(&kctx->reg_lock);
 }
-
 KBASE_EXPORT_TEST_API(kbase_gpu_vm_unlock);
+
+void kbase_gpu_vm_unlock_with_pmode_sync(struct kbase_context *kctx)
+{
+	kbase_gpu_vm_unlock(kctx);
+#if MALI_USE_CSF
+	up_read(&kctx->kbdev->csf.pmode_sync_sem);
+#endif
+}
 
 #if IS_ENABLED(CONFIG_DEBUG_FS)
 struct kbase_jit_debugfs_data {
@@ -4052,9 +4066,6 @@ static int kbase_jit_grow(struct kbase_context *kctx,
 	if (reg->gpu_alloc->nents >= info->commit_pages)
 		goto done;
 
-	/* Grow the backing */
-	old_size = reg->gpu_alloc->nents;
-
 	/* Allocate some more pages */
 	delta = info->commit_pages - reg->gpu_alloc->nents;
 	pages_required = delta;
@@ -4097,6 +4108,17 @@ static int kbase_jit_grow(struct kbase_context *kctx,
 		kbase_mem_pool_lock(pool);
 	}
 
+	if (reg->gpu_alloc->nents >= info->commit_pages) {
+		kbase_mem_pool_unlock(pool);
+		spin_unlock(&kctx->mem_partials_lock);
+		dev_info(
+			kctx->kbdev->dev,
+			"JIT alloc grown beyond the required number of initially required pages, this grow no longer needed.");
+		goto done;
+	}
+
+	old_size = reg->gpu_alloc->nents;
+	delta = info->commit_pages - old_size;
 	gpu_pages = kbase_alloc_phy_pages_helper_locked(reg->gpu_alloc, pool,
 			delta, &prealloc_sas[0]);
 	if (!gpu_pages) {
@@ -4360,7 +4382,7 @@ struct kbase_va_region *kbase_jit_allocate(struct kbase_context *kctx,
 		}
 	}
 
-	kbase_gpu_vm_lock(kctx);
+	kbase_gpu_vm_lock_with_pmode_sync(kctx);
 	mutex_lock(&kctx->jit_evict_lock);
 
 	/*
@@ -4442,7 +4464,7 @@ struct kbase_va_region *kbase_jit_allocate(struct kbase_context *kctx,
 			kbase_jit_done_phys_increase(kctx, needed_pages);
 #endif /* MALI_JIT_PRESSURE_LIMIT_BASE */
 
-		kbase_gpu_vm_unlock(kctx);
+		kbase_gpu_vm_unlock_with_pmode_sync(kctx);
 
 		if (ret < 0) {
 			/*
@@ -4507,7 +4529,7 @@ struct kbase_va_region *kbase_jit_allocate(struct kbase_context *kctx,
 #endif /* MALI_JIT_PRESSURE_LIMIT_BASE */
 
 		mutex_unlock(&kctx->jit_evict_lock);
-		kbase_gpu_vm_unlock(kctx);
+		kbase_gpu_vm_unlock_with_pmode_sync(kctx);
 
 		reg = kbase_mem_alloc(kctx, info->va_pages, info->commit_pages, info->extension,
 				      &flags, &gpu_addr, mmu_sync_info);
@@ -4609,9 +4631,9 @@ void kbase_jit_free(struct kbase_context *kctx, struct kbase_va_region *reg)
 		u64 delta = old_pages - new_size;
 
 		if (delta) {
-			mutex_lock(&kctx->reg_lock);
+			kbase_gpu_vm_lock_with_pmode_sync(kctx);
 			kbase_mem_shrink(kctx, reg, old_pages - delta);
-			mutex_unlock(&kctx->reg_lock);
+			kbase_gpu_vm_unlock_with_pmode_sync(kctx);
 		}
 	}
 
@@ -4718,8 +4740,7 @@ void kbase_jit_term(struct kbase_context *kctx)
 	struct kbase_va_region *walker;
 
 	/* Free all allocations for this context */
-
-	kbase_gpu_vm_lock(kctx);
+	kbase_gpu_vm_lock_with_pmode_sync(kctx);
 	mutex_lock(&kctx->jit_evict_lock);
 	/* Free all allocations from the pool */
 	while (!list_empty(&kctx->jit_pool_head)) {
@@ -4762,7 +4783,7 @@ void kbase_jit_term(struct kbase_context *kctx)
 	WARN_ON(kctx->jit_phys_pages_to_be_allocated);
 #endif
 	mutex_unlock(&kctx->jit_evict_lock);
-	kbase_gpu_vm_unlock(kctx);
+	kbase_gpu_vm_unlock_with_pmode_sync(kctx);
 
 	/*
 	 * Flush the freeing of allocations whose backing has been freed

@@ -61,9 +61,9 @@ static void kbase_gpu_gwt_setup_pages(struct kbase_context *kctx,
 
 int kbase_gpu_gwt_start(struct kbase_context *kctx)
 {
-	kbase_gpu_vm_lock(kctx);
+	kbase_gpu_vm_lock_with_pmode_sync(kctx);
 	if (kctx->gwt_enabled) {
-		kbase_gpu_vm_unlock(kctx);
+		kbase_gpu_vm_unlock_with_pmode_sync(kctx);
 		return -EBUSY;
 	}
 
@@ -90,7 +90,7 @@ int kbase_gpu_gwt_start(struct kbase_context *kctx)
 
 	kbase_gpu_gwt_setup_pages(kctx, ~KBASE_REG_GPU_WR);
 
-	kbase_gpu_vm_unlock(kctx);
+	kbase_gpu_vm_unlock_with_pmode_sync(kctx);
 	return 0;
 }
 

@@ -109,8 +109,6 @@ enum batt_health_ui {
 #error "GBMS_CCBIN_BUCKET_COUNT needs to be a value from 1-100"
 #endif
 
-#define get_boot_sec() div_u64(ktime_to_ns(ktime_get_boottime()), NSEC_PER_SEC)
-
 struct ssoc_uicurve {
 	qnum_t real;
 	qnum_t ui;
@@ -306,9 +304,9 @@ struct swelling_data {
 struct bhi_weight bhi_w[] = {
 	[BHI_ALGO_ACHI] = {100, 0, 0},
 	[BHI_ALGO_ACHI_B] = {100, 0, 0},
-	[BHI_ALGO_ACHI_RAVG] = {95, 5, 0},
-	[BHI_ALGO_ACHI_RAVG_B] = {95, 5, 0},
-	[BHI_ALGO_MIX_N_MATCH] = {90, 10, 5},
+	[BHI_ALGO_ACHI_RAVG] = {100, 0, 0},
+	[BHI_ALGO_ACHI_RAVG_B] = {100, 0, 0},
+	[BHI_ALGO_MIX_N_MATCH] = {90, 0, 10},
 };
 
 struct bm_date {
@@ -374,6 +372,7 @@ struct health_data
 	int bhi_debug_imp_index;
 	int bhi_debug_sd_index;
 	int bhi_debug_health_index;
+	int bhi_debug_health_status;
 	/* algo BHI_ALGO_INDI capacity threshold */
 	int bhi_indi_cap;
 	/* algo BHI_ALGO_ACHI_B bounds check */
@@ -3782,19 +3781,67 @@ static int batt_get_activation_date(struct bhi_data *bhi_data)
 	return 0;
 }
 
+static int get_activation_date(struct health_data *health_data, struct rtc_time *tm)
+{
+	struct bhi_data *bhi_data = &health_data->bhi_data;
+	struct bm_date date;
+
+	/* read activation date when data is not successfully read in probe */
+	if (bhi_data->act_date[0] == 0) {
+		int ret;
+
+		ret = batt_get_activation_date(bhi_data);
+		if (ret < 0)
+			return ret;
+	}
+
+	/*
+	 * convert date to epoch
+	 * for example:
+	 * act_date: ASCII 2/2/3 -> bm_y/bm_m/bm_d: 22/02/03
+	 *                       -> tm_year/tm_mon/tm_mday: 122/01/03
+	 *                       -> epoch: 164384640
+	 */
+	date.bm_y = xymd_to_date(bhi_data->act_date[0]) + 20;
+	date.bm_m = xymd_to_date(bhi_data->act_date[1]);
+	date.bm_d = xymd_to_date(bhi_data->act_date[2]);
+
+	tm->tm_year = date.bm_y + 100; /* base is 1900 */
+	tm->tm_mon = date.bm_m - 1;    /* 0 is Jan ... 11 is Dec */
+	tm->tm_mday = date.bm_d;       /* 1st ... 31th */
+
+	return 0;
+}
+
+#define ONE_HR_SEC		3600
 #define ONE_YEAR_HRS		(24 * 365)
 #define BHI_INDI_CAP_DEFAULT	85
-static int bhi_individual_conditions_index(const struct health_data *health_data)
+static int bhi_individual_conditions_index(struct health_data *health_data)
 {
 	const struct bhi_data *bhi_data = &health_data->bhi_data;
-	const int cur_impedance = batt_ravg_value(&bhi_data->res_state);
-	const int age_impedance_max = bhi_data->act_impedance * 2;
 	const int cur_capacity_pct = 100 - bhi_data->capacity_fade;
 	const int bhi_indi_cap = health_data->bhi_indi_cap;
+	struct rtc_time tm;
+	int battery_age, ret;
 
-	if (health_data->bhi_data.battery_age >= ONE_YEAR_HRS ||
-	    (cur_impedance > 0 && age_impedance_max > 0 && cur_impedance >= age_impedance_max) ||
-	    cur_capacity_pct <= bhi_indi_cap)
+	ret = get_activation_date(health_data, &tm);
+	if (ret == 0) {
+		struct timespec64 ts;
+		unsigned long long date_in_epoch;
+
+		/* get by local time */
+		ktime_get_real_ts64(&ts);
+		date_in_epoch = ts.tv_sec - (sys_tz.tz_minuteswest * 60);
+
+		battery_age = (date_in_epoch - rtc_tm_to_time64(&tm)) / ONE_HR_SEC;
+		pr_debug("%s: age: act_date:%d timerh:%d\n", __func__, battery_age,
+			 health_data->bhi_data.battery_age);
+	} else {
+		battery_age = health_data->bhi_data.battery_age;
+	}
+
+	/* Removed impedance condition due to validation required */
+	if (battery_age >= ONE_YEAR_HRS || cur_capacity_pct <= bhi_indi_cap)
 		return health_data->need_rep_threshold * 100;
 
 	return BHI_ALGO_FULL_HEALTH;
@@ -4131,7 +4178,7 @@ static int bhi_cycle_count_index(const struct health_data *health_data)
 	return cc_index;
 }
 
-static int bhi_calc_health_index(int algo, const struct health_data *health_data,
+static int bhi_calc_health_index(int algo, struct health_data *health_data,
 				 int cap_index, int imp_index, int sd_index)
 {
 	int ratio, index;
@@ -4194,6 +4241,9 @@ static enum bhi_status bhi_calc_health_status(int algo, int health_index,
 {
 	enum bhi_status health_status;
 
+	if (data->bhi_debug_health_status)
+		return data->bhi_debug_health_status;
+
 	if (algo == BHI_ALGO_DISABLED)
 		return BH_UNKNOWN;
 
@@ -4231,6 +4281,16 @@ static int batt_bhi_data_load(struct batt_drv *batt_drv)
 	/* TODO: prime current impedance if not using RAVG */
 
 	return 0;
+}
+
+static int batt_bhi_map_algo(int algo, const struct health_data *health_data)
+{
+	if (algo != BHI_ALGO_DTOOL)
+		return algo;
+
+	/* diagnostic tool use BHI_ALGO_ACHI_B as default when bhi_algo is disabled */
+	return health_data->bhi_algo != BHI_ALGO_DISABLED ?
+	       health_data->bhi_algo : BHI_ALGO_ACHI_B;
 }
 
 /* call holding mutex_lock(&batt_drv->chg_lock)  */
@@ -7133,24 +7193,31 @@ static ssize_t health_index_stats_show(struct device *dev,
 	struct health_data *health_data = &batt_drv->health_data;
 	int len = 0, i;
 
+	/* might be POR and FG not ready */
+	if (bhi_data->battery_age <= 0 && bhi_data->cycle_count <= 0)
+		return len;
+
 	mutex_lock(&batt_drv->chg_lock);
 
-	for (i = 0; i < BHI_ALGO_MAX; i++) {
+	for (i = BHI_ALGO_DISABLED; i < BHI_ALGO_MAX; i++) {
 		int health_index, health_status, cap_index, imp_index, sd_index;
+		const int use_algo = batt_bhi_map_algo(i, health_data);
 
-		cap_index = bhi_calc_cap_index(i, batt_drv);
-		imp_index = bhi_calc_imp_index(i, health_data);
-		sd_index = bhi_calc_sd_index(i, health_data);
-		health_index = bhi_calc_health_index(i, health_data, cap_index, imp_index, sd_index);
-		health_status = bhi_calc_health_status(i, BHI_ROUND_INDEX(health_index), health_data);
+		cap_index = bhi_calc_cap_index(use_algo, batt_drv);
+		imp_index = bhi_calc_imp_index(use_algo, health_data);
+		sd_index = bhi_calc_sd_index(use_algo, health_data);
+		health_index = bhi_calc_health_index(use_algo, health_data, cap_index,
+						     imp_index, sd_index);
+		health_status = bhi_calc_health_status(use_algo, BHI_ROUND_INDEX(health_index),
+						       health_data);
 		if (health_index < 0)
 			continue;
 
 		pr_debug("bhi: %d: %d, %d,%d,%d %d,%d,%d %d,%d\n", i,
 			 health_status, health_index, cap_index, imp_index,
 			 bhi_data->swell_cumulative,
-			 bhi_health_get_capacity(i, bhi_data),
-			 bhi_health_get_impedance(i, bhi_data),
+			 bhi_health_get_capacity(use_algo, bhi_data),
+			 bhi_health_get_impedance(use_algo, bhi_data),
 			 bhi_data->battery_age,
 			 bhi_data->cycle_count);
 
@@ -7162,8 +7229,8 @@ static ssize_t health_index_stats_show(struct device *dev,
 				 BHI_ROUND_INDEX(cap_index),
 				 BHI_ROUND_INDEX(imp_index),
 				 bhi_data->swell_cumulative,
-				 bhi_health_get_capacity(i, bhi_data),
-				 bhi_health_get_impedance(i, bhi_data),
+				 bhi_health_get_capacity(use_algo, bhi_data),
+				 bhi_health_get_impedance(use_algo, bhi_data),
 				 bhi_data->battery_age,
 				 bhi_data->cycle_count,
 				 batt_bpst_stats_update(batt_drv));
@@ -7187,6 +7254,9 @@ static ssize_t health_algo_store(struct device *dev,
 	ret = kstrtoint(buf, 0, &value);
 	if (ret < 0)
 		return ret;
+
+	if (value < BHI_ALGO_DISABLED || value >= BHI_ALGO_MAX || value == BHI_ALGO_DTOOL)
+		return -EINVAL;
 
 	mutex_lock(&batt_drv->chg_lock);
 	batt_drv->health_data.bhi_algo = value;
@@ -7344,35 +7414,16 @@ static ssize_t first_usage_date_show(struct device *dev,
 	struct power_supply *psy = container_of(dev, struct power_supply, dev);
 	struct batt_drv *batt_drv = power_supply_get_drvdata(psy);
 	struct bhi_data *bhi_data = &batt_drv->health_data.bhi_data;
-	struct bm_date date;
 	struct rtc_time tm;
+	int ret;
 
 	/* return if the device tree is set */
 	if (bhi_data->first_usage_date)
 		return scnprintf(buf, PAGE_SIZE, "%d\n", bhi_data->first_usage_date);
 
-	/* read activation date when data is not successfully read in probe */
-	if (bhi_data->act_date[0] == 0) {
-		int ret;
-
-		ret = batt_get_activation_date(&batt_drv->health_data.bhi_data);
-		if (ret < 0)
-			return scnprintf(buf, PAGE_SIZE, "%d\n", ret);
-	}
-
-	/* convert date to epoch
-	 * for example:
-	 * act_date: ASCII 2/2/3 -> bm_y/bm_m/bm_d: 22/02/03
-	 *                       -> tm_year/tm_mon/tm_mday: 122/01/03
-	 *                       -> epoch: 164384640
-	 */
-	date.bm_y = xymd_to_date(bhi_data->act_date[0]) + 20;
-	date.bm_m = xymd_to_date(bhi_data->act_date[1]);
-	date.bm_d = xymd_to_date(bhi_data->act_date[2]);
-
-	tm.tm_year = date.bm_y + 100;	// base is 1900
-	tm.tm_mon = date.bm_m - 1;	// 0 is Jan ... 11 is Dec
-	tm.tm_mday = date.bm_d;		// 1st ... 31th
+	ret = get_activation_date(&batt_drv->health_data, &tm);
+	if (ret < 0)
+		return scnprintf(buf, PAGE_SIZE, "%d\n", -EIO);
 
 	return scnprintf(buf, PAGE_SIZE, "%lld\n", rtc_tm_to_time64(&tm));
 }
@@ -8270,6 +8321,8 @@ static int batt_init_debugfs(struct batt_drv *batt_drv)
 			   &batt_drv->health_data.bhi_debug_sd_index);
 	debugfs_create_u32("bhi_debug_health_idx", 0644, de,
 			   &batt_drv->health_data.bhi_debug_health_index);
+	debugfs_create_u32("bhi_debug_health_status", 0644, de,
+			   &batt_drv->health_data.bhi_debug_health_status);
 	debugfs_create_file("bhi_debug_status", 0644, de, batt_drv,
 			   &debug_bhi_status_fops);
 	debugfs_create_file("reset_first_usage_date", 0644, de, batt_drv,
@@ -9439,7 +9492,7 @@ static int gbatt_get_property(struct power_supply *psy,
 	 *    POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE
 	 */
 	case GBMS_PROP_CHARGE_CHARGER_STATE:
-		val->intval = batt_drv->chg_state.v;
+		container_of(val, union gbms_propval, prop)->int64val = batt_drv->chg_state.v;
 		break;
 
 	case POWER_SUPPLY_PROP_CYCLE_COUNT:
@@ -9808,6 +9861,7 @@ static int batt_bhi_init(struct batt_drv *batt_drv)
 	health_data->bhi_debug_imp_index = 0;
 	health_data->bhi_debug_sd_index = 0;
 	health_data->bhi_debug_health_index = 0;
+	health_data->bhi_debug_health_status = 0;
 
 	return 0;
 }

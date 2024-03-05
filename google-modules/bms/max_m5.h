@@ -25,7 +25,7 @@
 /* change to 1 or 0 to load FG model with default parameters on startup */
 #define MAX_M5_LOAD_MODEL_DISABLED	-1
 #define MAX_M5_LOAD_MODEL_IDLE		0
-#define MAX_M5_LOAD_MODEL_REQUEST	5
+#define MAX_M5_LOAD_MODEL_REQUEST	1
 
 #define MAX_M5_FG_MODEL_START		0x80
 #define MAX_M5_FG_MODEL_SIZE		48
@@ -197,6 +197,7 @@ int max_m5_model_state_sscan(struct max_m5_data *m5_data, const char *buf,
 int max_m5_fg_model_sscan(struct max_m5_data *m5_data, const char *buf,
 			  int max);
 int max_m5_fg_model_cstr(char *buf, int max, const struct max_m5_data *m5_data);
+int max_m5_get_rc_switch_param(struct max_m5_data *m5_data, u16 *rc2_tempco, u16 *rc2_learncfg);
 
 /* read saved value */
 ssize_t max_m5_gmsr_state_cstr(char *buf, int max);

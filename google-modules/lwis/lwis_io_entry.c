@@ -16,7 +16,7 @@
 #include "lwis_io_entry.h"
 #include "lwis_util.h"
 
-int lwis_io_entry_poll(struct lwis_device *lwis_dev, struct lwis_io_entry *entry)
+int lwis_io_entry_poll(struct lwis_device *lwis_dev, struct lwis_io_entry *entry, bool is_short)
 {
 	uint64_t val, start;
 	uint64_t timeout_ms = entry->read_assert.timeout_ms;
@@ -40,8 +40,13 @@ int lwis_io_entry_poll(struct lwis_device *lwis_dev, struct lwis_io_entry *entry
 				entry->read_assert.bid, entry->read_assert.offset);
 			return -ETIMEDOUT;
 		}
-		/* Sleep for 1ms */
-		usleep_range(1000, 1000);
+		if (is_short) {
+			/* Sleep for 10us */
+			usleep_range(10, 10);
+		} else {
+			/* Sleep for 1ms */
+			usleep_range(1000, 1000);
+		}
 	}
 	return ret;
 }
@@ -62,5 +67,17 @@ int lwis_io_entry_read_assert(struct lwis_device *lwis_dev, struct lwis_io_entry
 	if ((val & entry->read_assert.mask) == (entry->read_assert.val & entry->read_assert.mask)) {
 		return 0;
 	}
+	return -EINVAL;
+}
+
+int lwis_io_entry_wait(struct lwis_device *lwis_dev, struct lwis_io_entry *entry)
+{
+	// Check if the sleep time is within the range.
+	if (entry->wait_us >= MIN_WAIT_TIME && entry->wait_us <= MAX_WAIT_TIME) {
+		usleep_range(entry->wait_us, entry->wait_us);
+		return 0;
+	}
+	dev_warn(lwis_dev->dev, "Sleep time should be within %dus ~ %dus\n", MIN_WAIT_TIME,
+		 MAX_WAIT_TIME);
 	return -EINVAL;
 }

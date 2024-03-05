@@ -156,6 +156,10 @@ s32 wl_netlink_send_msg(int pid, int type, int seq, const void *data, size_t siz
 #define APCS_DEFAULT_5G_CH	149
 #define APCS_DEFAULT_6G_CH	5
 
+extern int wl_android_set_whitelist_ssid(struct net_device *dev,
+	wl_ssid_whitelist_t *ssid_whitelist, uint32 len, uint32 flush);
+extern int wl_android_set_blacklist_bssid(struct net_device *dev, maclist_t *blacklist,
+    uint32 len, uint32 flush);
 int wl_android_set_ap_mac_list(struct net_device *dev, int macmode, struct maclist *maclist);
 #ifdef WL_BCNRECV
 extern int wl_android_bcnrecv_config(struct net_device *ndev, char *data,

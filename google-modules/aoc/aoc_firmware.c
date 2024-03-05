@@ -219,6 +219,20 @@ bool _aoc_fw_is_valid_sysmmu_size(const struct firmware *fw)
 		(cfg->sysmmu_size % sizeof(struct sysmmu_entry) == 0);
 }
 
+uint16_t _aoc_fw_bl_size(const struct firmware *fw)
+{
+	struct aoc_image_config *cfg = _aoc_fw_image_config(fw);
+
+	return cfg->bl_size;
+}
+
+u32 *_aoc_fw_bl(const struct firmware *fw)
+{
+	struct aoc_image_config *cfg = _aoc_fw_image_config(fw);
+
+	return (u32 *)((uint8_t *)cfg + cfg->bl_offset);
+}
+
 struct sysmmu_entry *_aoc_fw_sysmmu_entry(const struct firmware *fw)
 {
 	struct aoc_image_config *cfg = _aoc_fw_image_config(fw);

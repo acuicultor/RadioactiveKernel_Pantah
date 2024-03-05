@@ -31,8 +31,7 @@
 #define ORDER_SMALL_PAGE 0
 #define ORDER_LARGE_PAGE 9
 
-/**
- * Borr does not have "real" PBHA support. However, since we only use a 36-bit PA on the bus,
+/* Borr does not have "real" PBHA support. However, since we only use a 36-bit PA on the bus,
  * AxADDR[39:36] is wired up to the GPU AxUSER[PBHA] field seen by the rest of the system.
  * Those AxADDR bits come from [39:36] in the page descriptor.
  *

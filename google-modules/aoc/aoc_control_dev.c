@@ -46,6 +46,8 @@ const static struct dev_pm_ops aoc_control_pm_ops = {
 	.complete = aoc_control_complete,
 };
 
+static bool notify_on_state_transition;
+
 /* Driver methods */
 
 /*
@@ -440,8 +442,8 @@ static ssize_t read_stat_by_name(struct device *dev, char *buf,
 
 static int aoc_control_prepare(struct device *dev)
 {
-	#if IS_ENABLED(CONFIG_SOC_GS201)
-		struct stats_prvdata *prvdata = dev_get_drvdata(dev);
+	if (notify_on_state_transition) {
+				struct stats_prvdata *prvdata = dev_get_drvdata(dev);
 		struct CMD_AP_STATE_TRANSITION cmd;
 		int ret;
 
@@ -453,14 +455,14 @@ static int aoc_control_prepare(struct device *dev)
 			dev_err(dev, "notifying AoC of entering deep sleep ret = %d\n", ret);
 
 		return ret;
-	#else
-		return 0;
-	#endif
+	}
+
+	return 0;
 }
 
 static void aoc_control_complete(struct device *dev)
 {
-	#if IS_ENABLED(CONFIG_SOC_GS201)
+	if (notify_on_state_transition) {
 		struct stats_prvdata *prvdata = dev_get_drvdata(dev);
 		struct CMD_AP_STATE_TRANSITION cmd;
 		int ret;
@@ -472,7 +474,7 @@ static void aoc_control_complete(struct device *dev)
 
 		if (ret < 0)
 			dev_err(dev, "notifying AoC of exiting deep sleep ret = %d\n", ret);
-	#endif
+	}
 }
 
 #define DECLARE_STAT(stat_name, sysfs_name)                                    \
@@ -678,6 +680,9 @@ static int aoc_control_probe(struct aoc_service_dev *sd)
 	prvdata->service_timeout = msecs_to_jiffies(STAT_READ_TIMEOUT);
 	mutex_init(&prvdata->lock);
 	prvdata->memory_vote_core_id = 1;
+
+	notify_on_state_transition = of_property_read_bool(dev->parent->of_node,
+							"notify-on-state-transition");
 
 	INIT_WORK(&prvdata->discovery_work, discovery_workitem);
 	dev_set_drvdata(dev, prvdata);

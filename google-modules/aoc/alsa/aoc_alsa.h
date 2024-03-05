@@ -267,6 +267,9 @@ struct aoc_chip {
 	long pcm_wait_time_in_ms;
 	long voice_pcm_wait_time_in_ms;
 
+	bool hotword_supported;
+	bool chre_supported;
+
 	struct AUDIO_OUTPUT_BT_A2DP_ENC_CFG a2dp_encoder_cfg;
 	struct CMD_AUDIO_OUTPUT_USB_CONFIG usb_sink_cfg;
 	struct CMD_AUDIO_OUTPUT_USB_CONFIG_V2 usb_sink_cfg_v2;
@@ -384,11 +387,8 @@ int ap_record_stop(struct aoc_chip *chip, struct aoc_alsa_stream *alsa_stream);
 int aoc_capture_filter_runtime_control(struct aoc_chip *chip, uint32_t port_id, bool on);
 int aoc_audio_capture_runtime_trigger(struct aoc_chip *chip, int ep_id, int dst, bool on);
 int aoc_audio_capture_eraser_enable(struct aoc_chip *chip, long enable);
-#if ! IS_ENABLED(CONFIG_SOC_GS101)
 int aoc_hotword_tap_enable(struct aoc_chip *chip, long enable);
-#endif
 int aoc_eraser_aec_reference_set(struct aoc_chip *chip, long ref_source);
-
 int aoc_load_cca_module(struct aoc_chip *chip, long load);
 
 int aoc_voice_call_mic_mute(struct aoc_chip *chip, int mute);
@@ -484,6 +484,7 @@ int aoc_incall_init(void);
 void aoc_incall_exit(void);
 int aoc_voip_init(void);
 void aoc_voip_exit(void);
+int aoc_audio_mic_mask_set(struct aoc_chip *chip, bool is_voice);
 
 int aoc_audio_us_record(struct aoc_chip *chip, bool enable);
 #endif
