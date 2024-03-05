@@ -1974,7 +1974,7 @@ void kbase_csf_firmware_reload_completed(struct kbase_device *kbdev)
 
 static u32 convert_dur_to_idle_count(struct kbase_device *kbdev, const u64 dur_ns, u32 *no_modifier)
 {
-#define MICROSECONDS_PER_SECOND 1000000u
+// #define MICROSECONDS_PER_SECOND 1000000u //
 #define HYSTERESIS_VAL_UNIT_SHIFT (10)
 	/* Get the cntfreq_el0 value, which drives the SYSTEM_TIMESTAMP */
 	u64 freq = kbase_arch_timer_get_cntfrq(kbdev);
