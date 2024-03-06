@@ -1,34 +1,58 @@
-Project name: RadioactiveKernel_Pantah-v2.1.1
+Project name: RadioactiveKernel_Pantah-v2.1.2
   * update build version (acuicultor) 
-  * KSU: update to v0.7.6 (acuicultor) [ea47781d4dcc]
-  * defconfig regenerate (acuicultor) [aa776a14859b]
-  * eh: Make the compression thread freezable to fix suspend death (Sultan Alsawaf) [bc7d772ee78d]
-  * eh: Simplify compression thread by removing statistics tracking (Sultan Alsawaf) [ba200af90360]
-  * eh: Make the sw_fifo emptiness check lockless (Sultan Alsawaf) [9512ad9fb535]
-  * eh: Increase hardware fifo size to 4096 pages (Sultan Alsawaf) [28c990ce88f1]
-  * eh: Use real-time priority for the compression thread (Sultan Alsawaf) [b0fdf17061f7]
-  * eh: Use interrupts to wait for compression completion (Sultan Alsawaf) [fb146f651efb]
-  * eh: Make the compression thread more efficient (Sultan Alsawaf) [1cc72e0dbc0b]
-  * eh: Reduce unnecessary wake ups for the compression thread (Sultan Alsawaf) [18f41ee425e0]
-  * eh: Use interrupts to wait for decompression completion on RT (Sultan Alsawaf) [4def3e8cc2a2]
-  * eh: Overhaul software fifo queue to take unlimited requests (Sultan Alsawaf) [5d7da152dbc1]
-  * eh: Fix software fifo queue ordering so that it's actually fifo (Sultan Alsawaf) [7bff099d1a5f]
-  * aoc: Block "debug" service since it also keeps triggering wakeups (Sultan Alsawaf) [edcbac9ceed0]
-  * aoc: Block "logging" service since it keeps triggering wakeups (Sultan Alsawaf) [309414db2f91]
-  * KSU: update to v0.7.5 (acuicultor) [a031a6fb138e]
-  * Revert "eh: Fix software fifo queue ordering so that it's actually fifo" (acuicultor) [2e950ca79692]
-  * Revert "eh: Overhaul software fifo queue to take unlimited requests" (acuicultor) [ec5810b8fde5]
-  * Revert "eh: Use interrupts to wait for decompression completion on RT" (acuicultor) [ad25cf720204]
-  * Revert "eh: Reduce unnecessary wake ups for the compression thread" (acuicultor) [98e72be389fd]
-  * Revert "eh: Make the compression thread more efficient" (acuicultor) [e27a568f4fc7]
-  * Revert "eh: Use interrupts to wait for compression completion" (acuicultor) [495923e64359]
-  * Revert "eh: Use real-time priority for the compression thread" (acuicultor) [9778a19d2e52]
-  * Revert "eh: Increase hardware fifo size to 4096 pages" (acuicultor) [25d0375705de]
-  * Revert "eh: Fix compression thread deadlock due to nr_request becoming negative" (acuicultor) [1f3dd7766223]
-  * arm64: Add '+' flags to arch for Tensor (HolyAngel) [f034c3a69b82]
-  * arm64/Makefile: Adjust spacing to match other lines (HolyAngel) [9e5fa9f76da4]
-  * Makefile: Update Optimization flags (HolyAngel) [22847791b7aa]
-  * dts/google: Fix Reg Property warnings (HolyAngel) [6310c146efe8]
-  * vendor modules: Re-Include trusty-irq.ko (HolyAngel) [b03a30b7068f]
-  * update build version (acuicultor) [ae713c88a14f]
-  * kernel/smp: Silence log spam for secondary cpu (HolyAngel) [45c7aead5a7a]
+  * treewide: fix clang warnings (acuicultor) [2f4ac106c251]
+  * eh: squash revert of all changes (acuicultor) [ab3358cd2ed9]
+  * aoc: Block "debug" service since it also keeps triggering wakeups (Sultan Alsawaf) [1fe523dee619]
+  * aoc: Block "logging" service since it keeps triggering wakeups (Sultan Alsawaf) [68f3adb8afc1]
+  * mali_kbase: Improve DVFS utilization accuracy (Sultan Alsawaf) [16db96c9eb8c]
+  * mali_kbase: Tune quickstep governor hysteresis to resist downclocking (Sultan Alsawaf) [dc42b75709aa]
+  * treewide: fix clang compile errors (acuicultor) [a36d725847dd]
+  * treewide: Fix Clang compile warnings (dawfukfr) [ec0b9b474fdd]
+  * treewide: Fix Clang compile warnings (Sultan Alsawaf) [22e60d38e38a]
+  * google-modules: fix monolithic compilation (freak07) [1c17a2779121]
+  * google modules: fix flag for monolithic build (freak07) [058831b2faf3]
+  * google modules: fix gxp compilation (freak07) [9fc94af799fd]
+  * uwb: Don't bail out when there's no module owner (Sultan Alsawaf) [fad2ab86a6ba]
+  * aoc: usb: Don't redefine xhci_get_input_control_ctx() when built-in (Sultan Alsawaf) [831bafee4f47]
+  * aoc: usb: Fix included directory paths for in-tree compilation (Sultan Alsawaf) [b9f2aeb33614]
+  * synaptics: Make get_bridge_connector() static (Sultan Alsawaf) [8b4b82b1aa70]
+  * goog_touch: Make get_bridge_connector() static (Sultan Alsawaf) [5a67719ebc90]
+  * focaltech: Make get_bridge_connector() static (Sultan Alsawaf) [71d1d09119af]
+  * sound: Build the correct snd-soc-wm-adsp module (Sultan Alsawaf) [922172396d25]
+  * drm: samsung: Fix missing return types and variable types (Sultan Alsawaf) [d5a63af72111]
+  * drm: samsung: Fix include path for in-tree builds (Sultan Alsawaf) [4a90f40b45d0]
+  * cs35l45: Fix include path for in-tree builds (Sultan Alsawaf) [6db370c652b8]
+  * cs35l41: Fix include path for in-tree builds (Sultan Alsawaf) [8d3098bd90a6]
+  * mali_kbase: Configure for in-tree builds (Sultan Alsawaf) [7eb2fe53b2b3]
+  * bms: max1720x_battery: Set algo_ver type to u32 (Sultan Alsawaf) [e79e43c2a810]
+  * bms: google_cpm: Make debug_printk_prlog static (Sultan Alsawaf) [468a2863023a]
+  * bms: Set EXTRA_CFLAGS in the environment rather than make command line (Sultan Alsawaf) [df5fe684ece8]
+  * bcmdhd: Configure BCMDHD_ROOT correctly for in-tree builds (Sultan Alsawaf) [a66ffb9f6515]
+  * treewide: Disable tracepoints with the same names (Sultan Alsawaf) [99961c323e27]
+  * google-modules: merge branch refs/heads/android-gs-pantah-5.10-android14-qpr2 from https://android.googlesource.com/kernel/google-modules/ (acuicultor) [ad0b73a093ce]
+  * Merge remote-tracking branch 'android.googlesource/android-gs-pantah-5.10-android14-qpr2' into A14-stable
+  * android.googlesource/android-gs-pantah-5.10-android14-qpr2: (1929 commits)
+  arm64/dts: cheetah: Set the tele camera transaction-process-limit to 20
+  arm64/dts: cheetah: update uwb min clamp value
+  arm64/dts: zuma: add rts-alive-control to serial_18
+  exynos_tty: disable auto flow control on suspend
+  arm64/dts: gs101/gs201: Add active trip point at 55
+  skip tlbflush in kswapd aging/reclaim path
+  arm64/dts: cheetah/panther: Increasing chg_mdis levels for more smooth throttling
+  vh: sched: Use trace_android_rvh_set_user_nice_locked
+  exynos-pcie: Reset rate switching during powerdown.
+  ANDROID: Update the ABI representation
+  ANDROID: GKI: add a vendor hook in ptep_clear_flush_young()
+  ANDROID: Update the ABI representation
+  ANDROID: sched: Add trace_android_rvh_set_user_nice_locked
+  FROMGIT: usb:gadget:uvc Do not use worker thread to pump isoc usb requests
+  FROMGIT: usb: gadget: uvc: Fix use-after-free for inflight usb_requests
+  FROMGIT: usb: gadget: uvc: move video disable logic to its own function
+  FROMGIT: usb: gadget: uvc: Allocate uvc_requests one at a time
+  FROMGIT: usb: gadget: uvc: prevent use of disabled endpoint
+  eh: Make the compression thread freezable to fix suspend death
+  eh: Fix software fifo queue ordering so that it's actually fifo
+  ...
+
+
+
