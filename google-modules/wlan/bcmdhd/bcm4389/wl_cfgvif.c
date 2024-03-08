@@ -3211,7 +3211,7 @@ wl_cfg80211_bcn_bringup_ap(
 	 * before ssid iovar. Sometimes before iovar context should
 	 * resume, the event may come and get processed.
 	 */
-	if (schedule_delayed_work(&cfg->ap_work,
+	if (queue_delayed_work(system_power_efficient_wq, &cfg->ap_work,
 			msecs_to_jiffies((const unsigned int)MAX_AP_LINK_WAIT_TIME))) {
 		WL_DBG(("ap timeout work scheduled\n"));
 	}

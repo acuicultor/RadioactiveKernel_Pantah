@@ -246,7 +246,7 @@ exit:
 #else
 				FALSE) {
 #endif /* DHD_PKT_LOGGING_DBGRING */
-				schedule_delayed_work(d_work, ring_info->interval);
+				queue_delayed_work(system_power_efficient_wq, d_work, ring_info->interval);
 			}
 		}
 	}
@@ -308,7 +308,7 @@ dhd_os_start_logging(dhd_pub_t *dhdp, char *ring_name, int log_level,
 	} else {
 		ring_info->interval = msecs_to_jiffies(time_intval * MSEC_PER_SEC);
 		cancel_delayed_work_sync(&ring_info->work);
-		schedule_delayed_work(&ring_info->work, ring_info->interval);
+		queue_delayed_work(system_power_efficient_wq, &ring_info->work, ring_info->interval);
 	}
 
 	return ret;
@@ -393,7 +393,7 @@ dhd_os_trigger_get_ring_data(dhd_pub_t *dhdp, char *ring_name)
 		if (ring_info->interval) {
 			cancel_delayed_work_sync(&ring_info->work);
 		}
-		schedule_delayed_work(&ring_info->work, 0);
+		queue_delayed_work(system_power_efficient_wq, &ring_info->work, 0);
 	} else {
 		DHD_ERROR(("%s : os_priv is NULL\n", __FUNCTION__));
 		ret = BCME_ERROR;
@@ -552,7 +552,7 @@ dhd_os_dbg_pullreq(void *os_priv, int ring_id)
 
 	ring_info = &((linux_dbgring_info_t *)os_priv)[ring_id];
 	cancel_delayed_work(&ring_info->work);
-	schedule_delayed_work(&ring_info->work, 0);
+	queue_delayed_work(system_power_efficient_wq, &ring_info->work, 0);
 }
 
 #ifdef DHD_PKT_LOGGING_DBGRING
