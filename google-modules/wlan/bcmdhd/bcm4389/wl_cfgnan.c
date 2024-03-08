@@ -2959,7 +2959,7 @@ wl_cfgnan_immediate_nan_disable_pending(struct bcm_cfg80211 *cfg)
 		WL_DBG(("Do immediate nan_disable work\n"));
 		DHD_NAN_WAKE_UNLOCK(cfg->pub);
 		if (cancel_delayed_work(&cfg->nancfg->nan_disable)) {
-			schedule_delayed_work(&cfg->nancfg->nan_disable, 0);
+			queue_delayed_work(system_power_efficient_wq, &cfg->nancfg->nan_disable, 0);
 		}
 	}
 }
@@ -3070,7 +3070,7 @@ wl_cfgnan_config_nmi_rand_mac(struct net_device *ndev,
 		if (delayed_work_pending(&cfg->nancfg->nan_nmi_rand)) {
 			cancel_delayed_work(&cfg->nancfg->nan_nmi_rand);
 		}
-		schedule_delayed_work(&cfg->nancfg->nan_nmi_rand,
+		queue_delayed_work(system_power_efficient_wq, &cfg->nancfg->nan_nmi_rand,
 				msecs_to_jiffies(cfg->nancfg->nmi_rand_intvl * 1000));
 	}
 	return ret;
@@ -10337,7 +10337,7 @@ wl_cfgnan_periodic_nmi_rand_addr(struct work_struct *work)
 		goto sched;
 	}
 
-	schedule_delayed_work(&cfg->nancfg->nan_nmi_rand,
+	queue_delayed_work(system_power_efficient_wq, &cfg->nancfg->nan_nmi_rand,
 			msecs_to_jiffies(nancfg->nmi_rand_intvl * 1000));
 	/* Send NMI change event to hal */
 	wl_cfgnan_send_nmi_change_event(cfg);
@@ -10345,7 +10345,7 @@ wl_cfgnan_periodic_nmi_rand_addr(struct work_struct *work)
 
 sched:
 	/* As FW is busy, retry NMI change after 60sec */
-	schedule_delayed_work(&cfg->nancfg->nan_nmi_rand, msecs_to_jiffies(60 * 1000));
+	queue_delayed_work(system_power_efficient_wq, &cfg->nancfg->nan_nmi_rand, msecs_to_jiffies(60 * 1000));
 }
 #ifdef WL_NAN_INSTANT_MODE
 void wl_cfgnan_inst_chan_support(struct bcm_cfg80211 *cfg,

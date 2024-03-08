@@ -1908,7 +1908,7 @@ dhd_rtt_set_cfg(dhd_pub_t *dhd, rtt_config_params_t *params)
 			 * Proxd timeout for NAN target list is scheduled as a whole,
 			 * and not per target, unlike for legacy target list
 			 */
-			schedule_delayed_work(&rtt_status->proxd_timeout,
+			queue_delayed_work(system_power_efficient_wq, &rtt_status->proxd_timeout,
 				msecs_to_jiffies(DHD_NAN_RTT_TIMER_INTERVAL_MS));
 		}
 #endif /* WL_NAN */
@@ -2138,8 +2138,11 @@ exit:
 void
 dhd_rtt_set_geofence_cur_target_idx(dhd_pub_t *dhd, int8 idx)
 {
+	int8 target_cnt = 0;
 	rtt_status_info_t *rtt_status = GET_RTTSTATE(dhd);
 
+	target_cnt = rtt_status->geofence_cfg.geofence_target_cnt;
+	ASSERT(idx < target_cnt);
 	rtt_status->geofence_cfg.cur_target_idx = idx;
 	return;
 }
@@ -3315,7 +3318,7 @@ dhd_rtt_start(dhd_pub_t *dhd)
 		err_at = 5;
 	} else {
 		/* schedule proxd timeout */
-		schedule_delayed_work(&rtt_status->proxd_timeout,
+		queue_delayed_work(system_power_efficient_wq, &rtt_status->proxd_timeout,
 			msecs_to_jiffies(DHD_NAN_RTT_TIMER_INTERVAL_MS));
 
 	}

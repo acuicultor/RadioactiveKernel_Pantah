@@ -122,7 +122,7 @@ static void edgetpu_pm_try_power_down(struct edgetpu_pm *etpm)
 		etdev_warn(etpm->etdev, "Power down request denied. Retrying in %d ms\n",
 			   EDGETPU_ASYNC_POWER_DOWN_RETRY_DELAY);
 		etpm->p->power_down_pending = true;
-		schedule_delayed_work(&etpm->p->power_down_work,
+		queue_delayed_work(system_power_efficient_wq, &etpm->p->power_down_work,
 				      msecs_to_jiffies(EDGETPU_ASYNC_POWER_DOWN_RETRY_DELAY));
 	} else {
 		if (ret)

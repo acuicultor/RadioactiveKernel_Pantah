@@ -35,7 +35,7 @@ static void sw_wdt_start(struct edgetpu_sw_wdt *wdt)
 		return;
 	}
 	etdev_dbg(wdt->etdev, "sw wdt: started\n");
-	schedule_delayed_work(&wdt->dwork, wdt->hrtbeat_jiffs);
+	queue_delayed_work(system_power_efficient_wq, &wdt->dwork, wdt->hrtbeat_jiffs);
 }
 
 static void sw_wdt_stop(struct edgetpu_sw_wdt *wdt)
@@ -97,7 +97,7 @@ static void sw_wdt_work(struct work_struct *work)
 		schedule_work(&etdev_sw_wdt->et_action_work.work);
 	} else {
 		/* reschedule to next beat. */
-		schedule_delayed_work(dwork, etdev_sw_wdt->hrtbeat_jiffs);
+		queue_delayed_work(system_power_efficient_wq, dwork, etdev_sw_wdt->hrtbeat_jiffs);
 	}
 }
 

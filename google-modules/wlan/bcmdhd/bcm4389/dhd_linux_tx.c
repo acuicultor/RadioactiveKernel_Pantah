@@ -1145,7 +1145,7 @@ dhd_eap_txcomplete(dhd_pub_t *dhdp, void *txp, bool success, int ifidx)
 						__FUNCTION__, ifidx));
 
 				OSL_ATOMIC_SET(dhdp->osh, &ifp->m4state, M4_TXFAILED);
-				schedule_delayed_work(&ifp->m4state_work,
+				queue_delayed_work(system_power_efficient_wq, &ifp->m4state_work,
 						msecs_to_jiffies(MAX_4WAY_TIMEOUT_MS));
 			} else {
 				cancel_delayed_work(&ifp->m4state_work);

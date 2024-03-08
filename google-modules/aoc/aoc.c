@@ -649,7 +649,7 @@ static void aoc_fw_callback(const struct firmware *fw, void *ctx)
 
 	/* Monitor if there is callback from aoc after 5sec */
 	cancel_delayed_work_sync(&prvdata->monitor_work);
-	schedule_delayed_work(&prvdata->monitor_work,
+	queue_delayed_work(system_power_efficient_wq, &prvdata->monitor_work,
 			msecs_to_jiffies(5 * 1000));
 
 	msleep(2000);
