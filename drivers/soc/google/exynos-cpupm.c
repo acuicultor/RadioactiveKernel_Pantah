@@ -1401,6 +1401,9 @@ static int exynos_cpupm_probe(struct platform_device *pdev)
 {
 	int ret, cpu;
 
+	if (!cal_is_initialized())
+		return -EPROBE_DEFER;
+
 	ret = extern_idle_ip_init(pdev->dev.of_node);
 	if (ret)
 		return ret;
