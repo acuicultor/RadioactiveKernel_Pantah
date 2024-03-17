@@ -114,6 +114,7 @@ extern void cal_cp_disable_dump_pc_no_pg(void);
 
 extern int cal_init(void);
 extern int cal_if_init(void *np);
+extern bool cal_is_initialized(void);
 
 extern void cal_register_pd_lookup_cmu_id(void *(*func)(u32 cmu_id));
 /* It is for debugging. */

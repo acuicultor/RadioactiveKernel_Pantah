@@ -483,15 +483,21 @@ void cal_cp_disable_dump_pc_no_pg(void)
 EXPORT_SYMBOL_GPL(cal_cp_disable_dump_pc_no_pg);
 #endif
 
+static bool cal_initialized;
+bool cal_is_initialized(void)
+{
+	return smp_load_acquire(&cal_initialized);
+}
+EXPORT_SYMBOL_GPL(cal_is_initialized);
+
 int cal_if_init(void *np)
 {
-	static int cal_initialized;
 	struct resource res;
 	int ret, len;
 	const __be32 *prop;
 	unsigned int minmax_idx = 0;
 
-	if (cal_initialized == 1)
+	if (cal_is_initialized())
 		return 0;
 
 	prop = of_get_property(np, "minmax_idx", &len);
@@ -544,7 +550,7 @@ int cal_if_init(void *np)
 	if (of_address_to_resource(np, 0, &res) == 0)
 		cmucal_dbg_set_cmu_top_base(res.start);
 
-	cal_initialized = 1;
+	smp_store_release(&cal_initialized, true);
 #ifdef CONFIG_DEBUG_FS
 	vclk_debug_init();
 #endif
