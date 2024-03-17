@@ -15,6 +15,7 @@
 #include <linux/of_fdt.h>
 #include <linux/libfdt.h>
 
+#include <asm/esr.h>
 #include <asm/stacktrace.h>
 
 #include <trace/hooks/fault.h>
