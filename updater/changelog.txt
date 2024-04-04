@@ -1,58 +1,18 @@
-Project name: RadioactiveKernel_Pantah-v2.1.2
+Project name: RadioactiveKernel_Pantah-v2.1.5
   * update build version (acuicultor) 
-  * treewide: fix clang warnings (acuicultor) [2f4ac106c251]
-  * eh: squash revert of all changes (acuicultor) [ab3358cd2ed9]
-  * aoc: Block "debug" service since it also keeps triggering wakeups (Sultan Alsawaf) [1fe523dee619]
-  * aoc: Block "logging" service since it keeps triggering wakeups (Sultan Alsawaf) [68f3adb8afc1]
-  * mali_kbase: Improve DVFS utilization accuracy (Sultan Alsawaf) [16db96c9eb8c]
-  * mali_kbase: Tune quickstep governor hysteresis to resist downclocking (Sultan Alsawaf) [dc42b75709aa]
-  * treewide: fix clang compile errors (acuicultor) [a36d725847dd]
-  * treewide: Fix Clang compile warnings (dawfukfr) [ec0b9b474fdd]
-  * treewide: Fix Clang compile warnings (Sultan Alsawaf) [22e60d38e38a]
-  * google-modules: fix monolithic compilation (freak07) [1c17a2779121]
-  * google modules: fix flag for monolithic build (freak07) [058831b2faf3]
-  * google modules: fix gxp compilation (freak07) [9fc94af799fd]
-  * uwb: Don't bail out when there's no module owner (Sultan Alsawaf) [fad2ab86a6ba]
-  * aoc: usb: Don't redefine xhci_get_input_control_ctx() when built-in (Sultan Alsawaf) [831bafee4f47]
-  * aoc: usb: Fix included directory paths for in-tree compilation (Sultan Alsawaf) [b9f2aeb33614]
-  * synaptics: Make get_bridge_connector() static (Sultan Alsawaf) [8b4b82b1aa70]
-  * goog_touch: Make get_bridge_connector() static (Sultan Alsawaf) [5a67719ebc90]
-  * focaltech: Make get_bridge_connector() static (Sultan Alsawaf) [71d1d09119af]
-  * sound: Build the correct snd-soc-wm-adsp module (Sultan Alsawaf) [922172396d25]
-  * drm: samsung: Fix missing return types and variable types (Sultan Alsawaf) [d5a63af72111]
-  * drm: samsung: Fix include path for in-tree builds (Sultan Alsawaf) [4a90f40b45d0]
-  * cs35l45: Fix include path for in-tree builds (Sultan Alsawaf) [6db370c652b8]
-  * cs35l41: Fix include path for in-tree builds (Sultan Alsawaf) [8d3098bd90a6]
-  * mali_kbase: Configure for in-tree builds (Sultan Alsawaf) [7eb2fe53b2b3]
-  * bms: max1720x_battery: Set algo_ver type to u32 (Sultan Alsawaf) [e79e43c2a810]
-  * bms: google_cpm: Make debug_printk_prlog static (Sultan Alsawaf) [468a2863023a]
-  * bms: Set EXTRA_CFLAGS in the environment rather than make command line (Sultan Alsawaf) [df5fe684ece8]
-  * bcmdhd: Configure BCMDHD_ROOT correctly for in-tree builds (Sultan Alsawaf) [a66ffb9f6515]
-  * treewide: Disable tracepoints with the same names (Sultan Alsawaf) [99961c323e27]
-  * google-modules: merge branch refs/heads/android-gs-pantah-5.10-android14-qpr2 from https://android.googlesource.com/kernel/google-modules/ (acuicultor) [ad0b73a093ce]
-  * Merge remote-tracking branch 'android.googlesource/android-gs-pantah-5.10-android14-qpr2' into A14-stable
-  * android.googlesource/android-gs-pantah-5.10-android14-qpr2: (1929 commits)
-  arm64/dts: cheetah: Set the tele camera transaction-process-limit to 20
-  arm64/dts: cheetah: update uwb min clamp value
-  arm64/dts: zuma: add rts-alive-control to serial_18
-  exynos_tty: disable auto flow control on suspend
-  arm64/dts: gs101/gs201: Add active trip point at 55
-  skip tlbflush in kswapd aging/reclaim path
-  arm64/dts: cheetah/panther: Increasing chg_mdis levels for more smooth throttling
-  vh: sched: Use trace_android_rvh_set_user_nice_locked
-  exynos-pcie: Reset rate switching during powerdown.
-  ANDROID: Update the ABI representation
-  ANDROID: GKI: add a vendor hook in ptep_clear_flush_young()
-  ANDROID: Update the ABI representation
-  ANDROID: sched: Add trace_android_rvh_set_user_nice_locked
-  FROMGIT: usb:gadget:uvc Do not use worker thread to pump isoc usb requests
-  FROMGIT: usb: gadget: uvc: Fix use-after-free for inflight usb_requests
-  FROMGIT: usb: gadget: uvc: move video disable logic to its own function
-  FROMGIT: usb: gadget: uvc: Allocate uvc_requests one at a time
-  FROMGIT: usb: gadget: uvc: prevent use of disabled endpoint
-  eh: Make the compression thread freezable to fix suspend death
-  eh: Fix software fifo queue ordering so that it's actually fifo
-  ...
-
-
-
+  * cpufreq: schedutil: Set default up/down rate limits to 500/1000 us (Sultan Alsawaf) [5f8cb252db6f]
+  * ANDROID: cpufreq/schedutil: add up/down frequency transition rate limits (Steve Muckle) [ce6836b9f5e2]
+  * bcmdhd: Disable IRQ affinity management when SBalance is enabled (Sultan Alsawaf) [2163f74716cd]
+  * sbalance: Fix systemic issues caused by flawed IRQ statistics (Sultan Alsawaf) [f87f105986fe]
+  * sbalance: Use non-atomic cpumask_clear_cpu() variant (Sultan Alsawaf) [773d9c90f0c6]
+  * sbalance: Use a deferrable timer to avoid waking idle CPUs (Sultan Alsawaf) [4a3c733afd4e]
+  * sbalance: Allow IRQs to be moved off of excluded CPUs (Sultan Alsawaf) [17f165d44af2]
+  * defconfig regenerate (acuicultor) [ffb1ef070f0c]
+  * Makefile: set -fvisibility=hidden for full LTO and -fvisibility=default for ThinLTO regardless of arch (flawedworld) [5f77b60112ec]
+  * Makefile: disable fno-omit-framepointer/ftracer/readable asm (HolyAngel) [3f564cfbf077]
+  * Makefile: Disable some more debugging (HolyAngel) [63e6b70304e5]
+  * Makefiles: Target Tensor2 (HolyAngel) [4c6e12a0d92d]
+  * exynos-cpupm: Fix init race panic with cal-if (Sultan Alsawaf) [178cf43af5bb]
+  * defconfig regenerate (acuicultor) [20fc98ef4c77]
+  * google-modules: update and add power efficient WQ to some drivers (acuicultor) [f55ce2f7bdd7]
+  * init: remove GKI driver that is not used anyway (freak07) [4128ed8f8b48]
