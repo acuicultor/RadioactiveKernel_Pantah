@@ -536,7 +536,7 @@ static bool s6e3hc3_set_self_refresh(struct exynos_panel *ctx, bool enable)
 	if (pmode->exynos_mode.is_lp_mode) {
 		/* set 10Hz while self refresh is active, otherwise clear it */
 		ctx->panel_idle_vrefresh = enable ? 10 : 0;
-		backlight_state_changed(ctx->bl);
+		notify_panel_mode_changed(ctx, true);
 		return false;
 	}
 
@@ -550,7 +550,7 @@ static bool s6e3hc3_set_self_refresh(struct exynos_panel *ctx, bool enable)
 		if (pmode->idle_mode == IDLE_MODE_ON_INACTIVITY) {
 			/* simply update idle vrefresh follow by self refresh */
 			ctx->panel_idle_vrefresh = enable ? idle_vrefresh : 0;
-			backlight_state_changed(ctx->bl);
+			notify_panel_mode_changed(ctx, false);
 			if (spanel->auto_mode_vrefresh != idle_vrefresh) {
 				dev_dbg(ctx->dev,
 					"early exit update needed for mode: %s (idle_vrefresh: %d)\n",
@@ -593,7 +593,7 @@ static bool s6e3hc3_set_self_refresh(struct exynos_panel *ctx, bool enable)
 	}
 	EXYNOS_DCS_WRITE_TABLE(ctx, lock_cmd_f0);
 
-	backlight_state_changed(ctx->bl);
+	notify_panel_mode_changed(ctx, false);
 
 	DPU_ATRACE_END(__func__);
 
@@ -827,7 +827,7 @@ static void s6e3hc3_extra_lhbm_settings(struct exynos_panel *ctx,
 	}
 }
 
-static inline bool is_local_gamma_supported(struct exynos_panel *ctx)
+static inline is_local_gamma_supported(struct exynos_panel *ctx)
 {
 	if ((ctx->panel_rev == PANEL_REV_EVT1) &&
 			 s6e3hc3_panel_id3_doe3_config(ctx))
@@ -1105,6 +1105,14 @@ static const struct exynos_display_underrun_param underrun_param = {
 
 static const u32 s6e3hc3_bl_range[] = {
 	94, 180, 270, 360, 2047
+};
+
+static const int s6e3hc3_vrefresh_range[] = {
+	10, 30, 60, 120
+};
+
+static const int s6e3hc3_lp_vrefresh_range[] = {
+	10, 30
 };
 
 static const struct exynos_panel_mode s6e3hc3_modes[] = {
@@ -1445,9 +1453,13 @@ const struct exynos_panel_desc samsung_s6e3hc3 = {
 	.bl_num_ranges = ARRAY_SIZE(s6e3hc3_bl_range),
 	.modes = s6e3hc3_modes,
 	.num_modes = ARRAY_SIZE(s6e3hc3_modes),
+	.vrefresh_range = s6e3hc3_vrefresh_range,
+	.vrefresh_range_count = ARRAY_SIZE(s6e3hc3_vrefresh_range),
 	.lp_mode = s6e3hc3_lp_modes,
 	.lp_mode_count = ARRAY_SIZE(s6e3hc3_lp_modes),
 	.lp_cmd_set = &s6e3hc3_lp_cmd_set,
+	.lp_vrefresh_range = s6e3hc3_lp_vrefresh_range,
+	.lp_vrefresh_range_count = ARRAY_SIZE(s6e3hc3_lp_vrefresh_range),
 	.binned_lp = s6e3hc3_binned_lp,
 	.num_binned_lp = ARRAY_SIZE(s6e3hc3_binned_lp),
 	.is_panel_idle_supported = true,

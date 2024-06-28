@@ -434,7 +434,7 @@ void* wl_cfg80211_btcoex_init(struct net_device *ndev)
 	return btco_inf;
 }
 
-void wl_cfg80211_btcoex_kill_handler(void)
+void wl_cfg80211_btcoex_kill_handler()
 {
 	if (!btcoex_info_loc)
 		return;
@@ -447,7 +447,7 @@ void wl_cfg80211_btcoex_kill_handler(void)
 	wl_cfg80211_btcoex_init_handler_status();
 }
 
-void wl_cfg80211_btcoex_deinit(void)
+void wl_cfg80211_btcoex_deinit()
 {
 	if (!btcoex_info_loc)
 		return;

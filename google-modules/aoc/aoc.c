@@ -649,7 +649,7 @@ static void aoc_fw_callback(const struct firmware *fw, void *ctx)
 
 	/* Monitor if there is callback from aoc after 5sec */
 	cancel_delayed_work_sync(&prvdata->monitor_work);
-	queue_delayed_work(system_power_efficient_wq, &prvdata->monitor_work,
+	schedule_delayed_work(&prvdata->monitor_work,
 			msecs_to_jiffies(5 * 1000));
 
 	msleep(2000);
@@ -1178,19 +1178,16 @@ static struct aoc_service_dev *create_service_device(struct aoc_prvdata *prvdata
 	if (!s)
 		return NULL;
 
+	dev = kzalloc(sizeof(struct aoc_service_dev), GFP_KERNEL);
+	if (!dev)
+		return NULL;
+	prvdata->services[index] = dev;
+
 	name = aoc_service_name(s);
 	if (!name)
 		return NULL;
 
 	memcpy_fromio(service_name, name, sizeof(service_name));
-	if (!strcmp(service_name, "logging") || !strcmp(service_name, "debug"))
-		return NULL;
-
-	dev = kzalloc(sizeof(struct aoc_service_dev), GFP_KERNEL);
-	if (!dev)
-		return NULL;
-
-	prvdata->services[index] = dev;
 
 	dev_set_name(&dev->dev, "%s", service_name);
 	dev->dev.parent = parent;
@@ -1388,14 +1385,19 @@ static void aoc_did_become_online(struct work_struct *work)
 	}
 
 	for (i = 0; i < s; i++) {
-		create_service_device(prvdata, i);
+		if (!create_service_device(prvdata, i)) {
+			dev_err(prvdata->dev, "failed to create service device at index %d\n", i);
+			goto err;
+		}
 	}
 
 	aoc_state = AOC_STATE_ONLINE;
 
 	for (i = 0; i < s; i++) {
-		if (prvdata->services[i])
-			device_register(&prvdata->services[i]->dev);
+		ret = device_register(&prvdata->services[i]->dev);
+		if (ret)
+			dev_err(dev, "failed to register service device %s err=%d\n",
+				dev_name(&prvdata->services[i]->dev), ret);
 	}
 
 err:
@@ -1621,7 +1623,7 @@ static void aoc_process_services(struct aoc_prvdata *prvdata, int offset)
 	for (i = 0; i < services; i++) {
 		service_dev = service_dev_at_index(prvdata, i);
 		if (!service_dev)
-			continue;
+			goto exit;
 
 		service = service_dev->service;
 		if (service_dev->mbox_index != offset)

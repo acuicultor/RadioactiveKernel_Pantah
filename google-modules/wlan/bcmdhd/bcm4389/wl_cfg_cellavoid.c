@@ -455,7 +455,7 @@ exit:
 reschedule:
 	if (cellavoid_info->csa_reschedule_cnt < CSA_MAX_RETRY_CNT) {
 		cellavoid_info->csa_reschedule_cnt++;
-		queue_delayed_work(system_power_efficient_wq, &cfg->csa_delayed_work,
+		schedule_delayed_work(&cfg->csa_delayed_work,
 			msecs_to_jiffies((const unsigned int)delay));
 	} else {
 		WL_ERR(("Hit CSA retry limit\n"));
@@ -1627,7 +1627,7 @@ wl_cellavoid_handle_apsta_concurrency(struct bcm_cfg80211 *cfg)
 				cellavoid_info->csa_info_cnt));
 			cellavoid_info->csa_progress = TRUE;
 			cellavoid_info->csa_reschedule_cnt = 0;
-			queue_delayed_work(system_power_efficient_wq, &cfg->csa_delayed_work,
+			schedule_delayed_work(&cfg->csa_delayed_work,
 				msecs_to_jiffies((const unsigned int)CSA_DELAYWORK_FIRST_INTERVAL));
 		}
 	}

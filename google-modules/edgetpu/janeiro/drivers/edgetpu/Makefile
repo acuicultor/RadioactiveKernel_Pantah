@@ -5,8 +5,13 @@
 
 obj-$(CONFIG_JANEIRO)		+= janeiro.o
 
-
-ccflags-y       += -DGIT_REPO_TAG=\"Not\ a\ git\ repository\"
+GIT_PATH=$(srctree)
+GIT_BIN=/usr/bin/git
+GIT=$(GIT_BIN) -C $(GIT_PATH)
+ifeq ($(shell $(GIT) rev-parse --is-inside-work-tree),true)
+	GIT_REPO_STATE=$(shell ($(GIT) status --porcelain | grep -q .) && echo -dirty)
+	ccflags-y       += -DGIT_REPO_TAG=\"$(shell $(GIT) rev-parse --short HEAD)$(GIT_REPO_STATE)-makefile\"
+endif
 
 edgetpu-objs	:= edgetpu-async.o edgetpu-dmabuf.o edgetpu-iremap-pool.o \
 		   edgetpu-mailbox.o edgetpu-mapping.o \

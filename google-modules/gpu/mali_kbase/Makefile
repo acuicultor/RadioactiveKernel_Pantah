@@ -62,6 +62,7 @@ ifeq ($(MALI_KCONFIG_EXT_PREFIX),)
         CONFIG_MALI_GATOR_SUPPORT ?= y
         CONFIG_MALI_ARBITRATION ?= n
         CONFIG_MALI_PARTITION_MANAGER ?= n
+        CONFIG_MALI_64BIT_HW_ACCESS ?= n
 
         ifneq ($(CONFIG_MALI_NO_MALI),y)
             # Prevent misuse when CONFIG_MALI_NO_MALI=y
@@ -122,17 +123,14 @@ ifeq ($(MALI_KCONFIG_EXT_PREFIX),)
         else
             # Prevent misuse when CONFIG_MALI_EXPERT=n
             CONFIG_MALI_CORESTACK = n
-            CONFIG_LARGE_PAGE_ALLOC_OVERRIDE = n
-            CONFIG_LARGE_PAGE_ALLOC = n
+            CONFIG_LARGE_PAGE_SUPPORT = y
             CONFIG_MALI_PWRSOFT_765 = n
-            CONFIG_MALI_MEMORY_FULLY_BACKED = n
             CONFIG_MALI_JOB_DUMP = n
             CONFIG_MALI_NO_MALI = n
             CONFIG_MALI_REAL_HW = y
             CONFIG_MALI_ERROR_INJECT = n
             CONFIG_MALI_HW_ERRATA_1485982_NOT_AFFECTED = n
             CONFIG_MALI_HW_ERRATA_1485982_USE_CLOCK_ALTERNATIVE = n
-            CONFIG_MALI_HOST_CONTROLS_SC_RAILS = n
             CONFIG_MALI_PRFCNT_SET_SELECT_VIA_DEBUG_FS = n
             CONFIG_MALI_DEBUG = n
             CONFIG_MALI_MIDGARD_ENABLE_TRACE = n
@@ -174,7 +172,7 @@ ifeq ($(MALI_KCONFIG_EXT_PREFIX),)
     endif
 
     # All Mali CONFIG should be listed here
-    CONFIGS := \
+    CONFIGS += \
         CONFIG_MALI_MIDGARD \
         CONFIG_MALI_GATOR_SUPPORT \
         CONFIG_MALI_ARBITER_SUPPORT \
@@ -187,16 +185,13 @@ ifeq ($(MALI_KCONFIG_EXT_PREFIX),)
         CONFIG_MALI_DMA_BUF_LEGACY_COMPAT \
         CONFIG_MALI_EXPERT \
         CONFIG_MALI_CORESTACK \
-        CONFIG_LARGE_PAGE_ALLOC_OVERRIDE \
-        CONFIG_LARGE_PAGE_ALLOC \
+        CONFIG_LARGE_PAGE_SUPPORT \
         CONFIG_MALI_PWRSOFT_765 \
-        CONFIG_MALI_MEMORY_FULLY_BACKED \
         CONFIG_MALI_JOB_DUMP \
         CONFIG_MALI_NO_MALI \
         CONFIG_MALI_ERROR_INJECT \
         CONFIG_MALI_HW_ERRATA_1485982_NOT_AFFECTED \
         CONFIG_MALI_HW_ERRATA_1485982_USE_CLOCK_ALTERNATIVE \
-        CONFIG_MALI_HOST_CONTROLS_SC_RAILS \
         CONFIG_MALI_PRFCNT_SET_PRIMARY \
         CONFIG_MALI_PRFCNT_SET_SECONDARY \
         CONFIG_MALI_PRFCNT_SET_TERTIARY \
@@ -220,6 +215,7 @@ ifeq ($(MALI_KCONFIG_EXT_PREFIX),)
         CONFIG_MALI_PIXEL_GPU_THERMAL \
         CONFIG_MALI_PIXEL_GPU_SECURE_RENDERING \
         CONFIG_MALI_PIXEL_GPU_SLC
+
 
 endif
 
@@ -252,21 +248,22 @@ EXTRA_CFLAGS := $(foreach config,$(CONFIGS), \
                         -D$(value config)=1))
 
 ifeq ($(MALI_KCONFIG_EXT_PREFIX),)
-    EXTRA_CFLAGS += -DCONFIG_MALI_PLATFORM_NAME='"$(CONFIG_MALI_PLATFORM_NAME)"'
-    EXTRA_CFLAGS += -DCONFIG_MALI_NO_MALI_DEFAULT_GPU='"$(CONFIG_MALI_NO_MALI_DEFAULT_GPU)"'
+    EXTRA_CFLAGS += -DCONFIG_MALI_PLATFORM_NAME='\"$(CONFIG_MALI_PLATFORM_NAME)\"'
+    EXTRA_CFLAGS += -DCONFIG_MALI_NO_MALI_DEFAULT_GPU='\"$(CONFIG_MALI_NO_MALI_DEFAULT_GPU)\"'
 endif
 
 #
 # KBUILD_EXTRA_SYMBOLS to prevent warnings about unknown functions
 #
-EXTRA_SYMBOLS += $(OUT_DIR)/../google-modules/gpu/mali_pixel/Module.symvers
+BASE_SYMBOLS = $(OUT_DIR)/../google-modules/gpu/mali_pixel/Module.symvers
+
+EXTRA_SYMBOLS += \
+    $(BASE_SYMBOLS)
 
 CFLAGS_MODULE += -Wall -Werror
-CFLAGS_MODULE += $(call cc-option, -Wno-format-security)
 
 # The following were added to align with W=1 in scripts/Makefile.extrawarn
 # from the Linux source tree (v5.18.14)
-ifdef MALI_ENABLE_EXTRAWARN
 CFLAGS_MODULE += -Wextra -Wunused -Wno-unused-parameter
 CFLAGS_MODULE += -Wmissing-declarations
 CFLAGS_MODULE += -Wmissing-format-attribute
@@ -284,10 +281,8 @@ CFLAGS_MODULE += -Wno-sign-compare
 CFLAGS_MODULE += -Wno-shift-negative-value
 # This flag is needed to avoid build errors on older kernels
 CFLAGS_MODULE += $(call cc-option, -Wno-cast-function-type)
-endif
 
 KBUILD_CPPFLAGS += -DKBUILD_EXTRA_WARN1
-KBUILD_OPTIONS += $(MAKE_ARGS)
 
 # The following were added to align with W=2 in scripts/Makefile.extrawarn
 # from the Linux source tree (v5.18.14)

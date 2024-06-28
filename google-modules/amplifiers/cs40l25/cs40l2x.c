@@ -275,6 +275,19 @@ void cs40l2x_set_state(struct cs40l2x_private *cs40l2x, bool state)
 }
 EXPORT_SYMBOL(cs40l2x_set_state);
 
+ssize_t strscpy_pad(char *dest, const char *src, size_t count)
+{
+	ssize_t written;
+
+	written = strscpy(dest, src, count);
+	if (written < 0 || written == count - 1)
+		return written;
+
+	memset(dest + written + 1, 0, count - written - 1);
+
+	return written;
+}
+
 static void cs40l2x_set_gpio_event(struct cs40l2x_private *cs40l2x, bool value)
 {
 	if (cs40l2x->gpio_event != value) {
@@ -11503,6 +11516,7 @@ static int cs40l2x_i2c_probe(struct i2c_client *i2c_client,
 		return -ENOMEM;
 
 	cs40l2x->dev = dev;
+	cs40l2x->dev->init_name = "i2c-c240l2x";
 	dev_set_drvdata(dev, cs40l2x);
 	i2c_set_clientdata(i2c_client, cs40l2x);
 

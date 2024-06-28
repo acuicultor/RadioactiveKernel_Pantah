@@ -1608,7 +1608,7 @@ static void wl_add_remove_pm_enable_work(struct bcm_cfg80211 *cfg,
 		if (dhd->up)
 #endif
 		{
-			if (queue_delayed_work(system_power_efficient_wq, &cfg->pm_enable_work,
+			if (schedule_delayed_work(&cfg->pm_enable_work,
 				msecs_to_jiffies((const unsigned int)wq_duration))) {
 
 #if defined(BCMDONGLEHOST)
@@ -15302,10 +15302,6 @@ wl_notify_rx_mgmt_frame(struct bcm_cfg80211 *cfg, bcm_struct_cfgdev *cfgdev,
 #if defined(BCMDONGLEHOST) && defined(TDLS_MSG_ONLY_WFD) && defined(WLTDLS)
 	dhd_pub_t *dhdp = (dhd_pub_t *)(cfg->pub);
 #endif /* BCMDONGLEHOST && TDLS_MSG_ONLY_WFD && WLTDLS */
-	if (ntoh32(e->datalen) < sizeof(wl_event_rx_frame_data_t)) {
-		WL_ERR(("wrong datalen:%d\n", ntoh32(e->datalen)));
-		return -EINVAL;
-	}
 
 	rxframe = (wl_event_rx_frame_data_t *)data;
 	if (!rxframe) {
@@ -15315,9 +15311,19 @@ wl_notify_rx_mgmt_frame(struct bcm_cfg80211 *cfg, bcm_struct_cfgdev *cfgdev,
 
 	/* Handle different versions of Rx frame data */
 	if (ntoh16(rxframe->version) == BCM_RX_FRAME_DATA_VERSION_1) {
+		if (ntoh32(e->datalen) < sizeof(wl_event_rx_frame_data_v1_t)) {
+			WL_ERR(("wrong datalen:%d for rxframe v1:%lu\n",
+				ntoh32(e->datalen), sizeof(wl_event_rx_frame_data_v1_t)));
+			return -EINVAL;
+		}
 		mgmt_frame_len = ntoh32(e->datalen) - (uint32)sizeof(wl_event_rx_frame_data_v1_t);
 		rx_event_data = (u8 *) ((wl_event_rx_frame_data_v1_t *)rxframe + 1);
 	} else if (ntoh16(rxframe->version) == BCM_RX_FRAME_DATA_VERSION_2) {
+		if (ntoh32(e->datalen) < sizeof(wl_event_rx_frame_data_v2_t)) {
+			WL_ERR(("wrong datalen:%d for rxframe v2:%lu\n",
+				ntoh32(e->datalen), sizeof(wl_event_rx_frame_data_v2_t)));
+			return -EINVAL;
+		}
 		mgmt_frame_len = ntoh32(e->datalen) - (uint32)sizeof(wl_event_rx_frame_data_v2_t);
 		rx_event_data = (u8 *) ((wl_event_rx_frame_data_v2_t *)rxframe + 1);
 	} else {
@@ -20431,12 +20437,12 @@ void wl_cfg80211_enable_trace(bool set, u32 level)
 		wl_dbg_level |= (WL_DBG_LEVEL & level);
 }
 
-uint32 wl_cfg80211_get_print_level(void)
+uint32 wl_cfg80211_get_print_level()
 {
 	return wl_dbg_level;
 }
 
-uint32 wl_cfg80211_get_log_level(void)
+uint32 wl_cfg80211_get_log_level()
 {
 	return wl_log_level;
 }
@@ -23654,7 +23660,7 @@ bool wl_cfg80211_check_in_progress(struct net_device *dev)
 					reason, GET_SEC_USEC(start_time), GET_SEC_USEC(curtime)));
 			/* Force clear states and send a hang event */
 			cfg->recovery_state = reason;
-			if (!queue_delayed_work(system_power_efficient_wq, &cfg->recovery_work,
+			if (!schedule_delayed_work(&cfg->recovery_work,
 				msecs_to_jiffies((const unsigned int)10))) {
 				/* Unexpected. If it happens, don't block suspend */
 				WL_ERR(("recovery work schedule failed!!\n"));

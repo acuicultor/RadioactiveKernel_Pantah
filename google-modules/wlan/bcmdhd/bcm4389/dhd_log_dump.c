@@ -569,7 +569,7 @@ dhd_nla_put_sssr_dump_len(void *ndev, uint32 *arr_len)
 #endif /* DHD_SSSR_DUMP */
 
 uint32
-dhd_get_time_str_len(void)
+dhd_get_time_str_len()
 {
 	char *ts = NULL, time_str[128];
 
