@@ -778,13 +778,12 @@ static void pixel_ufs_compl_command(void *data, struct ufs_hba *hba,
 static void pixel_ufs_prepare_command(void *data, struct ufs_hba *hba,
 			struct request *rq, struct ufshcd_lrb *lrbp, int *err)
 {
-	struct exynos_ufs *ufs = to_exynos_ufs(hba);
 
 	u8 opcode;
 
 	*err = 0;
 
-	if (!(rq->cmd_flags & (REQ_META | REQ_IDLE)) && !ufs->always_use_wb)
+	if (!(rq->cmd_flags & (REQ_META | REQ_IDLE)))
 		return;
 
 	if (hba->dev_info.wspecversion <= 0x300)
@@ -944,20 +943,6 @@ static ssize_t manual_gc_store(struct device *dev,
 					BKOPS_STATUS_CRITICAL);
 		if (!hba->auto_bkops_enabled)
 			err = -EAGAIN;
-	}
-
-	/* flush wb buffer */
-	if (hba->dev_info.wspecversion >= 0x0310) {
-		enum query_opcode opcode = (value == MANUAL_GC_ON) ?
-						UPIU_QUERY_OPCODE_SET_FLAG:
-						UPIU_QUERY_OPCODE_CLEAR_FLAG;
-		u8 index = ufshcd_wb_get_query_index(hba);
-
-		ufshcd_query_flag_retry(hba, opcode,
-				QUERY_FLAG_IDN_WB_BUFF_FLUSH_DURING_HIBERN8,
-				index, NULL);
-		ufshcd_query_flag_retry(hba, opcode,
-				QUERY_FLAG_IDN_WB_BUFF_FLUSH_EN, index, NULL);
 	}
 
 	if (err || hrtimer_active(&ufs->manual_gc.hrtimer)) {
@@ -1130,41 +1115,6 @@ static ssize_t uic_link_state_show(struct device *dev,
 				hba->uic_link_state));
 }
 
-static ssize_t always_use_wb_show(struct device *dev,
-				  struct device_attribute *attr, char *buf)
-{
-	struct ufs_hba *hba = dev_get_drvdata(dev);
-	struct exynos_ufs *ufs = to_exynos_ufs(hba);
-	u32 value = ufs->always_use_wb ? 1 : 0;
-
-	return snprintf(buf, PAGE_SIZE, "%x\n", value);
-}
-static ssize_t always_use_wb_store(struct device *dev,
-				   struct device_attribute *attr,
-				   const char *buf, size_t count)
-{
-	struct ufs_hba *hba = dev_get_drvdata(dev);
-	struct exynos_ufs *ufs = to_exynos_ufs(hba);
-	bool always_use_wb;
-
-	if (kstrtobool(buf, &always_use_wb))
-		return -EINVAL;
-
-	if (always_use_wb != ufs->always_use_wb) {
-		enum query_opcode opcode = always_use_wb ?
-						UPIU_QUERY_OPCODE_SET_FLAG :
-						UPIU_QUERY_OPCODE_CLEAR_FLAG;
-		u8 index = ufshcd_wb_get_query_index(hba);
-
-		ufshcd_query_flag_retry(hba, opcode,
-				QUERY_FLAG_IDN_WB_BUFF_FLUSH_DURING_HIBERN8,
-				index, NULL);
-		ufs->always_use_wb = always_use_wb;
-	}
-
-	return count;
-}
-
 static DEVICE_ATTR_RO(vendor);
 static DEVICE_ATTR_RO(model);
 static DEVICE_ATTR_RO(rev);
@@ -1174,7 +1124,6 @@ static DEVICE_ATTR_RW(manual_gc_hold);
 static DEVICE_ATTR_RO(host_capabilities);
 static DEVICE_ATTR_RO(curr_dev_pwr_mode);
 static DEVICE_ATTR_RO(uic_link_state);
-static DEVICE_ATTR_RW(always_use_wb);
 SLOWIO_ATTR_RW(read, PIXEL_SLOWIO_READ);
 SLOWIO_ATTR_RW(write, PIXEL_SLOWIO_WRITE);
 SLOWIO_ATTR_RW(unmap, PIXEL_SLOWIO_UNMAP);
@@ -1190,7 +1139,6 @@ static struct attribute *pixel_sysfs_ufshcd_attrs[] = {
 	&dev_attr_host_capabilities.attr,
 	&dev_attr_curr_dev_pwr_mode.attr,
 	&dev_attr_uic_link_state.attr,
-	&dev_attr_always_use_wb.attr,
 	&ufs_slowio_read_us.attr.attr,
 	&ufs_slowio_read_cnt.attr.attr,
 	&ufs_slowio_write_us.attr.attr,
@@ -1877,7 +1825,6 @@ int pixel_init(struct ufs_hba *hba)
 	memset(&ufs->ufs_stats, 0, sizeof(struct pixel_ufs_stats));
 	memset(&ufs->power_stats, 0, sizeof(struct pixel_power_stats));
 	ufs->ufs_stats.hibern8_flag = false;
-	ufs->always_use_wb = false;
 	INIT_WORK(&ufs->update_sysfs_work, pixel_ufs_update_sysfs_work);
 
 	ret = register_trace_android_vh_ufs_prepare_command(
