@@ -447,6 +447,10 @@ static void exynos_ufs_set_features(struct ufs_hba *hba)
 	hba->caps = UFSHCD_CAP_CLK_GATING |
 			UFSHCD_CAP_HIBERN8_WITH_CLK_GATING;
 
+	/* Enable WriteBooster */
+	hba->caps |= UFSHCD_CAP_WB_EN;
+	hba->vps->wb_flush_threshold = UFS_WB_BUF_REMAIN_PERCENT(80);
+
 	/* quirks of common driver */
 	hba->quirks = UFSHCD_QUIRK_PRDT_BYTE_GRAN |
 			UFSHCI_QUIRK_SKIP_RESET_INTR_AGGR |
