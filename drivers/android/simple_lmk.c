@@ -273,98 +273,19 @@ static int simple_lmk_reclaim_thread(void *data)
 	set_freezable();
 
 	while (1) {
-		wait_event_freezable(oom_waitq, atomic_read(&needs_reclaim));
-		scan_and_kill();
-		atomic_set(&needs_reclaim, 0);
-	}
-
-	return 0;
-}
-
-static struct mm_struct *next_reap_victim(void)
-{
-	struct mm_struct *mm = NULL;
-	bool should_retry = false;
-	int i;
-
-	/* Take a write lock so no victim's mm can be freed while scanning */
-	write_lock(&mm_free_lock);
-	for (i = 0; i < nr_victims; i++, mm = NULL) {
-		/* Check if this victim is alive and hasn't been reaped yet */
-		mm = victims[i].mm;
-		if (!mm || test_bit(MMF_OOM_SKIP, &mm->flags))
-			continue;
-
-		/* Do a trylock so the reaper thread doesn't sleep */
-		if (!mmap_read_trylock(mm)) {
-			should_retry = true;
-			continue;
-		}
+		wait_event(oom_waitq, atomic_read(&needs_reclaim));
 
 		/*
-		 * Check MMF_OOM_SKIP again under the lock in case this mm was
-		 * reaped by exit_mmap() and then had its page tables destroyed.
-		 * No mmgrab() is needed because the reclaim thread sets
-		 * MMF_OOM_VICTIM under task_lock() for the mm's task, which
-		 * guarantees that MMF_OOM_VICTIM is always set before the
-		 * victim mm can enter exit_mmap(). Therefore, an mmap read lock
-		 * is sufficient to keep the mm struct itself from being freed.
+		 * Kill a batch of processes and wait for their memory to be
+		 * freed. After their memory is freed, sleep for 20 ms to give
+		 * OOM'd allocations a chance to scavenge for the newly-freed
+		 * pages. Rinse and repeat while there are still OOM'd
+		 * allocations.
 		 */
-		if (!test_bit(MMF_OOM_SKIP, &mm->flags))
-			break;
-		mmap_read_unlock(mm);
-	}
-
-	if (!mm) {
-		if (should_retry)
-			/* Return ERR_PTR(-EAGAIN) to try reaping again later */
-			mm = ERR_PTR(-EAGAIN);
-		else if (!reclaim_active)
-			/*
-			 * Nothing left to reap, so stop simple_lmk_mm_freed()
-			 * from iterating over the victims array since reclaim
-			 * is no longer active. Return NULL to stop reaping.
-			 */
-			nr_victims = 0;
-	}
-	write_unlock(&mm_free_lock);
-
-	return mm;
-}
-
-static void reap_victims(void)
-{
-	struct mm_struct *mm;
-
-	while ((mm = next_reap_victim())) {
-		if (IS_ERR(mm)) {
-			/* Wait one jiffy before trying to reap again */
-			schedule_timeout_uninterruptible(1);
-			continue;
-		}
-
-		/*
-		 * Try to reap the victim. Unflag the mm for exit_mmap() reaping
-		 * and mark it as reaped with MMF_OOM_SKIP if successful.
-		 */
-		if (__oom_reap_task_mm(mm)) {
-			clear_bit(MMF_OOM_VICTIM, &mm->flags);
-			set_bit(MMF_OOM_SKIP, &mm->flags);
-		}
-		mmap_read_unlock(mm);
-	}
-}
-
-static int simple_lmk_reaper_thread(void *data)
-{
-	/* Use a lower priority than the reclaim thread */
-	set_task_rt_prio(current, MAX_RT_PRIO - 2);
-	set_freezable();
-
-	while (1) {
-		wait_event_freezable(reaper_waitq,
-				     atomic_cmpxchg_relaxed(&needs_reap, 1, 0));
-		reap_victims();
+		do {
+			scan_and_kill(MIN_FREE_PAGES);
+			msleep(20);
+		} while (atomic_read(&needs_reclaim));
 	}
 
 	return 0;
@@ -372,9 +293,16 @@ static int simple_lmk_reaper_thread(void *data)
 
 void simple_lmk_decide_reclaim(int kswapd_priority)
 {
-	if (kswapd_priority == CONFIG_ANDROID_SIMPLE_LMK_AGGRESSION &&
-	    !atomic_cmpxchg_acquire(&needs_reclaim, 0, 1))
+	if (kswapd_priority != CONFIG_ANDROID_SIMPLE_LMK_AGGRESSION)
+		return;
+
+	if (!atomic_cmpxchg(&needs_reclaim, 0, 1))
 		wake_up(&oom_waitq);
+}
+
+void simple_lmk_stop_reclaim(void)
+{
+	atomic_set(&needs_reclaim, 0);
 }
 
 void simple_lmk_mm_freed(struct mm_struct *mm)
