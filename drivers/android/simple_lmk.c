@@ -20,9 +20,6 @@
 /* Kill up to this many victims per reclaim */
 #define MAX_VICTIMS 1024
 
-/* Timeout in jiffies for each reclaim */
-#define RECLAIM_EXPIRES msecs_to_jiffies(CONFIG_ANDROID_SIMPLE_LMK_TIMEOUT_MSEC)
-
 struct victim_info {
 	struct task_struct *tsk;
 	struct mm_struct *mm;
@@ -51,12 +48,8 @@ static struct victim_info victims[MAX_VICTIMS] __cacheline_aligned_in_smp;
 static DECLARE_WAIT_QUEUE_HEAD(oom_waitq);
 static DECLARE_WAIT_QUEUE_HEAD(reaper_waitq);
 static DECLARE_COMPLETION(reclaim_done);
-static __cacheline_aligned_in_smp DEFINE_RWLOCK(mm_free_lock);
-static int nr_victims;
-static bool reclaim_active;
+static atomic_t victims_to_kill = ATOMIC_INIT(0);
 static atomic_t needs_reclaim = ATOMIC_INIT(0);
-static atomic_t needs_reap = ATOMIC_INIT(0);
-static atomic_t nr_killed = ATOMIC_INIT(0);
 
 static int victim_cmp(const void *lhs_ptr, const void *rhs_ptr)
 {
@@ -181,16 +174,8 @@ static int process_victims(int vlen)
 
 static void set_task_rt_prio(struct task_struct *tsk, int priority)
 {
-	const struct sched_param rt_prio = {
-		.sched_priority = priority
-	};
 
-	sched_setscheduler_nocheck(tsk, SCHED_RR, &rt_prio);
-}
-
-static void scan_and_kill(void)
-{
-	int i, nr_to_kill = 0, nr_found = 0;
+	int i, nr_to_kill = 0, nr_victims = 0;
 	unsigned long pages_found = 0;
 
 
@@ -234,12 +219,13 @@ static void scan_and_kill(void)
 	 * Store the final number of victims for simple_lmk_mm_freed() and the
 	 * reaper thread, and indicate that reclaim is active.
 	 */
-	write_lock(&mm_free_lock);
-	nr_victims = nr_to_kill;
-	reclaim_active = true;
-	write_unlock(&mm_free_lock);
+	sort(victims, nr_to_kill, sizeof(*victims), victim_size_cmp, NULL);
+
+	/* Second round of victim processing to finally select the victims */
+	nr_to_kill = process_victims(nr_to_kill, pages_needed);
 
 	/* Kill the victims */
+	atomic_set_release(&victims_to_kill, nr_to_kill);
 	for (i = 0; i < nr_to_kill; i++) {
 		struct victim_info *victim = &victims[i];
 		struct task_struct *t, *vtsk = victim->tsk;
@@ -285,29 +271,8 @@ static void scan_and_kill(void)
 		task_unlock(vtsk);
 	}
 
-	/*
-	 * Sort the victims by descending order of anonymous pages so the reaper
-	 * thread can prioritize reaping the victims with the most anonymous
-	 * pages first. Then wake the reaper thread if it's asleep. The lock
-	 * orders the needs_reap store before waitqueue_active().
-	 */
-	write_lock(&mm_free_lock);
-	sort(victims, nr_to_kill, sizeof(*victims), victim_cmp, victim_swap);
-	atomic_set(&needs_reap, 1);
-	write_unlock(&mm_free_lock);
-	if (waitqueue_active(&reaper_waitq))
-		wake_up(&reaper_waitq);
-
-	/* Wait until all the victims die or until the timeout is reached */
-	if (!wait_for_completion_timeout(&reclaim_done, RECLAIM_EXPIRES))
-		pr_info("Timeout hit waiting for victims to die, proceeding\n");
-
-	/* Clean up for future reclaims but let the reaper thread keep going */
-	write_lock(&mm_free_lock);
-	reinit_completion(&reclaim_done);
-	reclaim_active = false;
-	nr_killed = (atomic_t)ATOMIC_INIT(0);
-	write_unlock(&mm_free_lock);
+	/* Wait until all the victims die */
+	wait_for_completion(&reclaim_done);
 }
 
 static int simple_lmk_reclaim_thread(void *data)
@@ -423,32 +388,20 @@ void simple_lmk_decide_reclaim(int kswapd_priority)
 
 void simple_lmk_mm_freed(struct mm_struct *mm)
 {
-	int i;
+	static atomic_t nr_killed = ATOMIC_INIT(0);
+	int i, nr_to_kill;
 
-	/*
-	 * Victims are guaranteed to have MMF_OOM_SKIP set after exit_mmap()
-	 * finishes. Use this to ignore unrelated dying processes.
-	 */
-	if (!test_bit(MMF_OOM_SKIP, &mm->flags))
-		return;
-
-	read_lock(&mm_free_lock);
-	for (i = 0; i < nr_victims; i++) {
-		if (victims[i].mm == mm) {
-			/*
-			 * Clear out this victim from the victims array and only
-			 * increment nr_killed if reclaim is active. If reclaim
-			 * isn't active, then clearing out the victim is done
-			 * solely for the reaper thread to avoid freed victims.
-			 */
-			victims[i].mm = NULL;
-			if (reclaim_active &&
-			    atomic_inc_return_relaxed(&nr_killed) == nr_victims)
+	nr_to_kill = atomic_read_acquire(&victims_to_kill);
+	for (i = 0; i < nr_to_kill; i++) {
+		if (cmpxchg(&victims[i].mm, mm, NULL) == mm) {
+			if (atomic_inc_return(&nr_killed) == nr_to_kill) {
+				atomic_set(&victims_to_kill, 0);
+				nr_killed = (atomic_t)ATOMIC_INIT(0);
 				complete(&reclaim_done);
+			}
 			break;
 		}
 	}
-	read_unlock(&mm_free_lock);
 }
 
 
