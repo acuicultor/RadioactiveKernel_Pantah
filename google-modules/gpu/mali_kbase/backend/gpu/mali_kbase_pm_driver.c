@@ -3277,6 +3277,7 @@ static int kbase_set_tiler_quirks(struct kbase_device *kbdev)
 	return 0;
 }
 
+
 static int kbase_pm_hw_issues_detect(struct kbase_device *kbdev)
 {
 	struct device_node *np = kbdev->dev->of_node;
@@ -3329,6 +3330,7 @@ static int kbase_pm_hw_issues_detect(struct kbase_device *kbdev)
 		error = kbase_set_mmu_quirks(kbdev);
 	}
 
+
 	return error;
 }
 
@@ -3348,6 +3350,7 @@ static void kbase_pm_hw_issues_apply(struct kbase_device *kbdev)
 #else
 	kbase_reg_write32(kbdev, GPU_CONTROL_ENUM(JM_CONFIG), kbdev->hw_quirks_gpu);
 #endif
+
 }
 
 void kbase_pm_cache_snoop_enable(struct kbase_device *kbdev)
@@ -3648,6 +3651,9 @@ int kbase_pm_init_hw(struct kbase_device *kbdev, unsigned int flags)
 	kbase_pm_hw_issues_apply(kbdev);
 	kbase_cache_set_coherency_mode(kbdev, kbdev->system_coherency);
 	kbase_amba_set_shareable_cache_support(kbdev);
+#if MALI_USE_CSF
+	kbase_backend_update_gpu_timestamp_offset(kbdev);
+#endif
 
 	/* Sanity check protected mode was left after reset */
 	WARN_ON(kbase_reg_read32(kbdev, GPU_CONTROL_ENUM(GPU_STATUS)) &

@@ -956,7 +956,7 @@ static int dhd_wifi_platform_load_usb(void)
 }
 #endif /* BCMDBUS */
 
-static int dhd_wifi_platform_load(void)
+static int dhd_wifi_platform_load()
 {
 	int err = 0;
 

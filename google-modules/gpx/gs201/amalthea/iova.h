@@ -10,12 +10,10 @@
 
 /*
  * No local access path.
- * Need to define GXP_IOVA_SYNC_BARRIERS and GXP_IOVA_AURORA_TOP in this
- * case.
+ * Need to define GXP_IOVA_AURORA_TOP in this case.
  */
 #define GXP_HAS_LAP 0
 
-#define GXP_IOVA_SYNC_BARRIERS          (0x100000)
 #define GXP_IOVA_MAILBOX(_x_)           (0x18390000 + (_x_) * 0x00020000)
 #define GXP_IOVA_EXT_TPU_MBX            (0x1CEC0000)
 #define GXP_IOVA_AURORA_TOP             (0x25C00000)

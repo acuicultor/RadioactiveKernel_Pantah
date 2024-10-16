@@ -203,6 +203,9 @@ int kbase_context_common_init(struct kbase_context *kctx)
 				 */
 				get_task_struct(task);
 				kctx->task = task;
+
+				/* PIXEL: For better visibility, save the comm from the tgid */
+				memcpy(kctx->comm, task->comm, sizeof(task->comm));
 			} else {
 				dev_err(kctx->kbdev->dev, "Failed to get task pointer for %s/%d",
 					current->comm, current->pid);

@@ -266,7 +266,7 @@ struct gcpm_drv  {
 
 /* Logging ----------------------------------------------------------------- */
 
-static int debug_printk_prlog = LOGLEVEL_INFO;
+int debug_printk_prlog = LOGLEVEL_INFO;
 
 /* ------------------------------------------------------------------------- */
 

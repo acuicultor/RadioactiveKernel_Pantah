@@ -29,7 +29,7 @@ extern struct be_path_cache port_array[PORT_MAX];
  * TODO: TDM/I2S will be removed from port naming and will be replaced
  * by sink-associated devices such as spker, headphone, bt, usb, mode
  */
-static int aoc_audio_sink[] = {
+static aoc_audio_sink[] = {
 	[PORT_I2S_0_RX] = SINK_HEADPHONE, [PORT_I2S_0_TX] = -1,
 	[PORT_I2S_1_RX] = SINK_BT,        [PORT_I2S_1_TX] = -1,
 	[PORT_I2S_2_RX] = SINK_USB,       [PORT_I2S_2_TX] = -1,
@@ -162,7 +162,7 @@ static int hw_id_to_phone_mic_source(int hw_id)
 }
 
 /* temp usage */
-static int aoc_audio_stream_type[] = {
+static aoc_audio_stream_type[] = {
 	[0] = MMAPED,  [1] = NORMAL,   [2] = NORMAL,	   [3] = NORMAL,  [4] = NORMAL,
 	[5] = NORMAL,  [6] = COMPRESS, [7] = NORMAL,	   [8] = NORMAL,  [9] = MMAPED,
 	[10] = RAW,    [11] = NORMAL,  [12] = NORMAL,	   [13] = NORMAL, [14] = NORMAL,
@@ -3462,13 +3462,18 @@ int aoc_compr_offload_setup(struct aoc_alsa_stream *alsa_stream, int type)
 	pr_info("%s type=%d format=%d sr=%d chan=%d\n", __func__, type, cmd.cfg.format,
 		cmd.cfg.samplerate, cmd.cfg.channels);
 
-	err = aoc_audio_control(CMD_OUTPUT_CHANNEL, (uint8_t *)&cmd, sizeof(cmd), NULL,
+	err = aoc_audio_control(CMD_OUTPUT_CHANNEL, (uint8_t *)&cmd, sizeof(cmd), (uint8_t *)&cmd,
 				alsa_stream->chip);
 	if (err < 0) {
 		pr_err("ERR:%d in set compress offload codec\n", err);
 		return err;
 	}
 
+	err = cmd.parent.reply;
+	if (err < 0) {
+		pr_err("ERR:%d in set compress offload codec cmd reply\n", err);
+		return err;
+	}
 	return 0;
 }
 

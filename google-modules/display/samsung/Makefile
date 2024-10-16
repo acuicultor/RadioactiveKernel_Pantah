@@ -26,10 +26,9 @@ EXTRA_CFLAGS += -DCONFIG_DRM_SAMSUNG_DSI=1
 EXTRA_CFLAGS += -DCONFIG_DRM_SAMSUNG_WB=1
 EXTRA_CFLAGS += -DCONFIG_DRM_SAMSUNG_TUI=1
 EXTRA_CFLAGS += -DDYNAMIC_DEBUG_MODULE=1
-subdir-ccflags-y := -I$(srctree)/$(src)/../include
+EXTRA_CFLAGS += -I$(realpath $(KERNEL_SRC)/$(M)/../include)
 
-# KBUILD_CFLAGS += $(call cc-disable-warning, deprecated-non-prototype)
-EXTRA_CFLAGS += $(call cc-disable-warning, deprecated-non-prototype)
+EXTRA_CFLAGS += -Werror
 
 modules modules_install clean:
 	$(MAKE) -C $(KERNEL_SRC) M=$(M) W=1 $(KBUILD_OPTIONS) EXTRA_CFLAGS="$(EXTRA_CFLAGS)" $(@)

@@ -140,34 +140,16 @@ static int sysmmu_fault_handler(struct iommu_fault *fault, void *token)
 
 #else /* !GXP_HAS_LAP */
 
-#define SYNC_BARRIERS_SIZE 0x100000
-
 static int gxp_map_csrs(struct gxp_dev *gxp, struct iommu_domain *domain,
 			struct gxp_mapped_resource *regs)
 {
-	int ret = iommu_map(domain, GXP_IOVA_AURORA_TOP, gxp->regs.paddr,
-			    gxp->regs.size, IOMMU_READ | IOMMU_WRITE);
-	if (ret)
-		return ret;
-	/*
-	 * Firmware expects to access the sync barriers at a separate
-	 * address, lower than the rest of the AURORA_TOP registers.
-	 */
-	ret = iommu_map(domain, GXP_IOVA_SYNC_BARRIERS,
-			gxp->regs.paddr + GXP_IOVA_SYNC_BARRIERS,
-			SYNC_BARRIERS_SIZE, IOMMU_READ | IOMMU_WRITE);
-	if (ret) {
-		iommu_unmap(domain, GXP_IOVA_AURORA_TOP, gxp->regs.size);
-		return ret;
-	}
-
-	return 0;
+	return iommu_map(domain, GXP_IOVA_AURORA_TOP, gxp->regs.paddr,
+			 gxp->regs.size, IOMMU_READ | IOMMU_WRITE);
 }
 
 static void gxp_unmap_csrs(struct gxp_dev *gxp, struct iommu_domain *domain,
 			   struct gxp_mapped_resource *regs)
 {
-	iommu_unmap(domain, GXP_IOVA_SYNC_BARRIERS, SYNC_BARRIERS_SIZE);
 	iommu_unmap(domain, GXP_IOVA_AURORA_TOP, gxp->regs.size);
 }
 

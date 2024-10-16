@@ -74,6 +74,7 @@
 #define MSC_USER_CHG_LEVEL_VOTER	"msc_user_chg_level"
 #define MSC_CHG_TERM_VOTER		"msc_chg_term"
 #define MSC_PWR_VOTER			"msc_pwr_disable"
+#define TEMP_DRYRUN_VOTER		"TEMP_DRYRUN_VOTER"
 
 #define CHG_TERM_LONG_DELAY_MS		300000	/* 5 min */
 #define CHG_TERM_SHORT_DELAY_MS		60000	/* 1 min */
@@ -348,6 +349,9 @@ struct chg_drv {
 	/* charging policy */
 	struct gvotable_election *charging_policy_votable;
 	int charging_policy;
+
+	int online;
+	int present;
 };
 
 static void reschedule_chg_work(struct chg_drv *chg_drv)
@@ -2310,7 +2314,9 @@ int chg_switch_profile(struct pd_pps_data *pps, struct power_supply *tcpm_psy,
 
 static void chg_update_csi(struct chg_drv *chg_drv)
 {
-	const bool is_dwell= chg_is_custom_enabled(chg_drv->charge_stop_level,
+	const bool is_policy = chg_drv->charging_policy == CHARGING_POLICY_VOTE_LONGLIFE;
+	const bool is_dwell = !is_policy &&
+			     chg_is_custom_enabled(chg_drv->charge_stop_level,
 						   chg_drv->charge_start_level);
 	const bool is_disconnected = chg_state_is_disconnected(&chg_drv->chg_state);
 	const bool is_full = (chg_drv->chg_state.f.flags & GBMS_CS_FLAG_DONE) != 0;
@@ -2349,7 +2355,7 @@ static void chg_update_csi(struct chg_drv *chg_drv)
 	/* Longlife is set on TEMP, DWELL and TRICKLE */
 	gvotable_cast_long_vote(chg_drv->csi_type_votable, "CSI_TYPE_DEFEND",
 				CSI_TYPE_LongLife,
-				is_temp || is_dwell || is_dock);
+				is_temp || is_dwell || is_dock || is_policy);
 
 	/* Set to normal if the device docked */
 	if (is_dock)
@@ -2377,7 +2383,7 @@ static void chg_work(struct work_struct *work)
 	int usb_online, usb_present = 0;
 	int present, online;
 	int soc = -1, update_interval = -1;
-	bool chg_done = false;
+	bool chg_done = false, online_changed = false;
 	int success, rc = 0;
 
 	__pm_stay_awake(chg_drv->chg_ws);
@@ -2436,8 +2442,23 @@ static void chg_work(struct work_struct *work)
 	}
 
 	/* ICL=0 on discharge will (might) cause usb online to go to 0 */
-	present =  usb_present || wlc_present || ext_present;
+	present = usb_present || wlc_present || ext_present;
 	online = usb_online || wlc_online || ext_online;
+
+	/* Logging */
+	if (chg_drv->online != online || chg_drv->present != present) {
+		struct bd_data *bd_state = &chg_drv->bd_state;
+
+		gbms_logbuffer_devlog(bd_state->bd_log, chg_drv->device,
+				      LOGLEVEL_INFO, 0, LOGLEVEL_INFO,
+				      "online:%d->%d [%d/%d/%d], present:%d->%d [%d/%d/%d] (%d)",
+				      chg_drv->online, online, usb_online, wlc_online,  ext_online,
+				      chg_drv->present, present, usb_present, wlc_present,
+				      ext_present, chg_drv->stop_charging);
+		chg_drv->online = online;
+		chg_drv->present = present;
+		online_changed = true;
+	}
 
 	if (usb_online  < 0 || wlc_online < 0 || ext_online < 0) {
 		pr_err("MSC_CHG error reading usb=%d wlc=%d ext=%d\n",
@@ -2470,7 +2491,7 @@ static void chg_work(struct work_struct *work)
 		if (rc < 0)
 			goto rerun_error;
 
-		if (stop_charging) {
+		if (stop_charging || online_changed) {
 			int ret;
 
 			ad.v = 0;
@@ -3216,13 +3237,13 @@ static ssize_t set_bd_temp_dry_run(struct device *dev, struct device_attribute *
 
 	if (val > 0 && !dry_run) {
 		ret = gvotable_cast_bool_vote(chg_drv->msc_temp_dry_run_votable,
-					      MSC_USER_VOTER, true);
+					      TEMP_DRYRUN_VOTER, true);
 		if (ret < 0)
 			dev_err(chg_drv->device, "Couldn't vote true"
 				" to bd_temp_dry_run ret=%d\n", ret);
 	} else if (val <= 0 && dry_run) {
 		ret = gvotable_cast_bool_vote(chg_drv->msc_temp_dry_run_votable,
-					      MSC_USER_VOTER, false);
+					      TEMP_DRYRUN_VOTER, false);
 		if (ret < 0)
 			dev_err(chg_drv->device, "Couldn't disable "
 				"bd_temp_dry_run ret=%d\n", ret);
@@ -4572,7 +4593,7 @@ static void chg_init_votables(struct chg_drv *chg_drv)
 
 	/* update temp dry run votable if bd_temp_dry_run is set from DT */
 	if (chg_drv->msc_temp_dry_run_votable && chg_drv->bd_state.bd_temp_dry_run)
-		gvotable_cast_bool_vote(chg_drv->msc_temp_dry_run_votable, MSC_CHG_VOTER,
+		gvotable_cast_bool_vote(chg_drv->msc_temp_dry_run_votable, TEMP_DRYRUN_VOTER,
 					chg_drv->bd_state.bd_temp_dry_run);
 }
 

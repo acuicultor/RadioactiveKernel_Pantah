@@ -78,6 +78,12 @@ enum max17x0x_reg_tags {
 	MAXFG_TAG_rcomp0,
 	MAXFG_TAG_tempco,
 	MAXFG_TAG_fstat,
+	MAXFG_TAG_avgt,
+	MAXFG_TAG_temp,
+	MAXFG_TAG_qh,
+	MAXFG_TAG_vcel,
+	MAXFG_TAG_avgv,
+	MAXFG_TAG_vfocv,
 };
 
 enum max17x0x_reg_types {
@@ -315,7 +321,7 @@ enum max1720x_drift_algo_version {
 /* fix to capacity estimation */
 struct max1720x_drift_data {
 	u16 rsense;
-	u32 algo_ver;
+	enum max1720x_drift_algo_version algo_ver;
 
 	u16 design_capacity;
 	int cycle_band;

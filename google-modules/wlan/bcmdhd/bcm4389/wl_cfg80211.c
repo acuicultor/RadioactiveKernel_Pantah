@@ -1608,7 +1608,7 @@ static void wl_add_remove_pm_enable_work(struct bcm_cfg80211 *cfg,
 		if (dhd->up)
 #endif
 		{
-			if (queue_delayed_work(system_power_efficient_wq, &cfg->pm_enable_work,
+			if (schedule_delayed_work(&cfg->pm_enable_work,
 				msecs_to_jiffies((const unsigned int)wq_duration))) {
 
 #if defined(BCMDONGLEHOST)
@@ -20437,12 +20437,12 @@ void wl_cfg80211_enable_trace(bool set, u32 level)
 		wl_dbg_level |= (WL_DBG_LEVEL & level);
 }
 
-uint32 wl_cfg80211_get_print_level(void)
+uint32 wl_cfg80211_get_print_level()
 {
 	return wl_dbg_level;
 }
 
-uint32 wl_cfg80211_get_log_level(void)
+uint32 wl_cfg80211_get_log_level()
 {
 	return wl_log_level;
 }
@@ -23660,7 +23660,7 @@ bool wl_cfg80211_check_in_progress(struct net_device *dev)
 					reason, GET_SEC_USEC(start_time), GET_SEC_USEC(curtime)));
 			/* Force clear states and send a hang event */
 			cfg->recovery_state = reason;
-			if (!queue_delayed_work(system_power_efficient_wq, &cfg->recovery_work,
+			if (!schedule_delayed_work(&cfg->recovery_work,
 				msecs_to_jiffies((const unsigned int)10))) {
 				/* Unexpected. If it happens, don't block suspend */
 				WL_ERR(("recovery work schedule failed!!\n"));

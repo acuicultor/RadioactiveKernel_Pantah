@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 /*
  *
- * (C) COPYRIGHT 2023 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2023-2024 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -21,6 +21,8 @@
 
 #ifndef _KUTF_KPROBE_H_
 #define _KUTF_KPROBE_H_
+
+struct dentry;
 
 int kutf_kprobe_init(struct dentry *base_dir);
 void kutf_kprobe_exit(void);
