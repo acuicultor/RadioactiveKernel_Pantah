@@ -228,8 +228,7 @@ static void set_task_rt_prio(struct task_struct *tsk, int priority)
 	atomic_set_release(&victims_to_kill, nr_to_kill);
 	for (i = 0; i < nr_to_kill; i++) {
 		struct victim_info *victim = &victims[i];
-		struct task_struct *t, *vtsk = victim->tsk;
-		struct mm_struct *mm = victim->mm;
+		struct task_struct *vtsk = victim->tsk;
 
 		pr_info("Killing %s with adj %d to free %lu KiB\n", vtsk->comm,
 			vtsk->signal->oom_score_adj,
@@ -238,27 +237,19 @@ static void set_task_rt_prio(struct task_struct *tsk, int priority)
 		/* Make the victim reap anonymous memory first in exit_mmap() */
 		set_bit(MMF_OOM_VICTIM, &mm->flags);
 
-		/* Accelerate the victim's death by forcing the kill signal */
-		do_send_sig_info(SIGKILL, SEND_SIG_PRIV, vtsk, PIDTYPE_TGID);
+		/* Grab a reference to the victim for later before unlocking */
+		get_task_struct(vtsk);
+		task_unlock(vtsk);
+	}
 
-		/*
-		 * Mark the thread group dead so that other kernel code knows,
-		 * and then elevate the thread group to SCHED_RR with minimum RT
-		 * priority. The entire group needs to be elevated because
-		 * there's no telling which threads have references to the mm as
-		 * well as which thread will happen to put the final reference
-		 * and release the mm's memory. If the mm is released from a
-		 * thread with low scheduling priority then it may take a very
-		 * long time for exit_mmap() to complete.
-		 */
-		rcu_read_lock();
-		for_each_thread(vtsk, t)
-			set_tsk_thread_flag(t, TIF_MEMDIE);
-		for_each_thread(vtsk, t)
-			set_task_rt_prio(t, 1);
-		rcu_read_unlock();
+	/* Try to speed up the death process now that we can schedule again */
+	for (i = 0; i < nr_to_kill; i++) {
+		struct task_struct *vtsk = victims[i].tsk;
 
-		/* Allow the victim to run on any CPU. This won't schedule. */
+		/* Increase the victim's priority to make it die faster */
+		set_user_nice(vtsk, MIN_NICE);
+
+		/* Allow the victim to run on any CPU */
 		set_cpus_allowed_ptr(vtsk, cpu_all_mask);
 
 		/* Signals can't wake frozen tasks; only a thaw operation can */
