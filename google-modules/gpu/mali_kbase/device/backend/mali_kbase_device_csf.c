@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note
 /*
  *
- * (C) COPYRIGHT 2019-2022 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2019-2023 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -23,27 +23,26 @@
 #include <device/mali_kbase_device.h>
 
 #include <mali_kbase_hwaccess_backend.h>
-#include <mali_kbase_hwcnt_backend_csf_if_fw.h>
-#include <mali_kbase_hwcnt_watchdog_if_timer.h>
+#include <hwcnt/backend/mali_kbase_hwcnt_backend_csf_if_fw.h>
+#include <hwcnt/mali_kbase_hwcnt_watchdog_if_timer.h>
 #include <mali_kbase_ctx_sched.h>
 #include <mali_kbase_reset_gpu.h>
 #include <csf/mali_kbase_csf.h>
 #include <csf/ipa_control/mali_kbase_csf_ipa_control.h>
-
-#if IS_ENABLED(CONFIG_MALI_NO_MALI)
 #include <backend/gpu/mali_kbase_model_linux.h>
-#endif
 
 #include <mali_kbase.h>
 #include <backend/gpu/mali_kbase_irq_internal.h>
 #include <backend/gpu/mali_kbase_pm_internal.h>
-#include <backend/gpu/mali_kbase_js_internal.h>
 #include <backend/gpu/mali_kbase_clk_rate_trace_mgr.h>
 #include <csf/mali_kbase_csf_csg_debugfs.h>
-#include <mali_kbase_hwcnt_virtualizer.h>
+#include <csf/mali_kbase_csf_kcpu_fence_debugfs.h>
+#include <hwcnt/mali_kbase_hwcnt_virtualizer.h>
 #include <mali_kbase_kinstr_prfcnt.h>
-#include <mali_kbase_vinstr.h>
 #include <tl/mali_kbase_timeline.h>
+#if IS_ENABLED(CONFIG_MALI_TRACE_POWER_GPU_WORK_PERIOD)
+#include <mali_kbase_gpu_metrics.h>
+#endif
 
 /**
  * kbase_device_firmware_hwcnt_term - Terminate CSF firmware and HWC
@@ -58,7 +57,6 @@ static void kbase_device_firmware_hwcnt_term(struct kbase_device *kbdev)
 {
 	if (kbdev->csf.firmware_inited) {
 		kbase_kinstr_prfcnt_term(kbdev->kinstr_prfcnt_ctx);
-		kbase_vinstr_term(kbdev->vinstr_ctx);
 		kbase_hwcnt_virtualizer_term(kbdev->hwcnt_gpu_virt);
 		kbase_hwcnt_backend_csf_metadata_term(&kbdev->hwcnt_gpu_iface);
 		kbase_csf_firmware_unload_term(kbdev);
@@ -87,39 +85,37 @@ static int kbase_backend_late_init(struct kbase_device *kbdev)
 	if (err)
 		goto fail_pm_powerup;
 
-	err = kbase_backend_timer_init(kbdev);
-	if (err)
-		goto fail_timer;
-
 #ifdef CONFIG_MALI_DEBUG
-#ifndef CONFIG_MALI_NO_MALI
-	if (kbasep_common_test_interrupt_handlers(kbdev) != 0) {
-		dev_err(kbdev->dev, "Interrupt assignment check failed.\n");
+#if IS_ENABLED(CONFIG_MALI_REAL_HW)
+	if (kbase_validate_interrupts(kbdev) != 0) {
+		dev_err(kbdev->dev, "Interrupt validation failed.\n");
 		err = -EINVAL;
 		goto fail_interrupt_test;
 	}
-#endif /* !CONFIG_MALI_NO_MALI */
+#endif /* IS_ENABLED(CONFIG_MALI_REAL_HW) */
 #endif /* CONFIG_MALI_DEBUG */
 
-	kbase_ipa_control_init(kbdev);
+	{
+		kbase_ipa_control_init(kbdev);
 
-	/* Initialise the metrics subsystem, it couldn't be initialized earlier
-	 * due to dependency on kbase_ipa_control.
-	 */
-	err = kbasep_pm_metrics_init(kbdev);
-	if (err)
-		goto fail_pm_metrics_init;
+		/* Initialise the metrics subsystem, it couldn't be initialized earlier
+		 * due to dependency on kbase_ipa_control.
+		 */
+		err = kbasep_pm_metrics_init(kbdev);
+		if (err)
+			goto fail_pm_metrics_init;
 
-	/* Do the initialisation of devfreq.
-	 * Devfreq needs backend_timer_init() for completion of its
-	 * initialisation and it also needs to catch the first callback
-	 * occurrence of the runtime_suspend event for maintaining state
-	 * coherence with the backend power management, hence needs to be
-	 * placed before the kbase_pm_context_idle().
-	 */
-	err = kbase_backend_devfreq_init(kbdev);
-	if (err)
-		goto fail_devfreq_init;
+		/* Do the initialisation of devfreq.
+		 * Devfreq needs backend_timer_init() for completion of its
+		 * initialisation and it also needs to catch the first callback
+		 * occurrence of the runtime_suspend event for maintaining state
+		 * coherence with the backend power management, hence needs to be
+		 * placed before the kbase_pm_context_idle().
+		 */
+		err = kbase_backend_devfreq_init(kbdev);
+		if (err)
+			goto fail_devfreq_init;
+	}
 
 	/* Update gpuprops with L2_FEATURES if applicable */
 	err = kbase_gpuprops_update_l2_features(kbdev);
@@ -142,13 +138,11 @@ fail_pm_metrics_init:
 	kbase_ipa_control_term(kbdev);
 
 #ifdef CONFIG_MALI_DEBUG
-#ifndef CONFIG_MALI_NO_MALI
+#if IS_ENABLED(CONFIG_MALI_REAL_HW)
 fail_interrupt_test:
-#endif /* !CONFIG_MALI_NO_MALI */
+#endif /* IS_ENABLED(CONFIG_MALI_REAL_HW) */
 #endif /* CONFIG_MALI_DEBUG */
 
-	kbase_backend_timer_term(kbdev);
-fail_timer:
 	kbase_pm_context_idle(kbdev);
 	kbase_hwaccess_pm_halt(kbdev);
 fail_pm_powerup:
@@ -198,6 +192,7 @@ static int kbase_csf_early_init(struct kbase_device *kbdev)
 static void kbase_csf_early_term(struct kbase_device *kbdev)
 {
 	kbase_csf_scheduler_early_term(kbdev);
+	kbase_csf_firmware_early_term(kbdev);
 }
 
 /**
@@ -222,8 +217,7 @@ static int kbase_csf_late_init(struct kbase_device *kbdev)
  */
 static int kbase_device_hwcnt_watchdog_if_init(struct kbase_device *kbdev)
 {
-	return kbase_hwcnt_watchdog_if_timer_create(
-		&kbdev->hwcnt_watchdog_timer);
+	return kbase_hwcnt_watchdog_if_timer_create(&kbdev->hwcnt_watchdog_timer);
 }
 
 /**
@@ -244,8 +238,7 @@ static void kbase_device_hwcnt_watchdog_if_term(struct kbase_device *kbdev)
  */
 static int kbase_device_hwcnt_backend_csf_if_init(struct kbase_device *kbdev)
 {
-	return kbase_hwcnt_backend_csf_if_fw_create(
-		kbdev, &kbdev->hwcnt_backend_csf_if_fw);
+	return kbase_hwcnt_backend_csf_if_fw_create(kbdev, &kbdev->hwcnt_backend_csf_if_fw);
 }
 
 /**
@@ -266,10 +259,10 @@ static void kbase_device_hwcnt_backend_csf_if_term(struct kbase_device *kbdev)
  */
 static int kbase_device_hwcnt_backend_csf_init(struct kbase_device *kbdev)
 {
-	return kbase_hwcnt_backend_csf_create(
-		&kbdev->hwcnt_backend_csf_if_fw,
-		KBASE_HWCNT_BACKEND_CSF_RING_BUFFER_COUNT,
-		&kbdev->hwcnt_watchdog_timer, &kbdev->hwcnt_gpu_iface);
+	return kbase_hwcnt_backend_csf_create(&kbdev->hwcnt_backend_csf_if_fw,
+					      KBASE_HWCNT_BACKEND_CSF_RING_BUFFER_COUNT,
+					      &kbdev->hwcnt_watchdog_timer,
+					      &kbdev->hwcnt_gpu_iface);
 }
 
 /**
@@ -282,18 +275,20 @@ static void kbase_device_hwcnt_backend_csf_term(struct kbase_device *kbdev)
 }
 
 static const struct kbase_device_init dev_init[] = {
-#if IS_ENABLED(CONFIG_MALI_NO_MALI)
+#if !IS_ENABLED(CONFIG_MALI_REAL_HW)
 	{ kbase_gpu_device_create, kbase_gpu_device_destroy, "Dummy model initialization failed" },
-#else
-	{ assign_irqs, NULL, "IRQ search failed" },
+#else /* !IS_ENABLED(CONFIG_MALI_REAL_HW) */
+	{ kbase_get_irqs, NULL, "IRQ search failed" },
 	{ registers_map, registers_unmap, "Register map failed" },
-#endif
+#endif /* !IS_ENABLED(CONFIG_MALI_REAL_HW) */
+#if IS_ENABLED(CONFIG_MALI_TRACE_POWER_GPU_WORK_PERIOD)
+	{ kbase_gpu_metrics_init, kbase_gpu_metrics_term, "GPU metrics initialization failed" },
+#endif /* IS_ENABLED(CONFIG_MALI_TRACE_POWER_GPU_WORK_PERIOD) */
 	{ power_control_init, power_control_term, "Power control initialization failed" },
 	{ kbase_device_io_history_init, kbase_device_io_history_term,
 	  "Register access history initialization failed" },
 	{ kbase_device_early_init, kbase_device_early_term, "Early device initialization failed" },
-	{ kbase_device_populate_max_freq, NULL, "Populating max frequency failed" },
-	{ kbase_pm_lowest_gpu_freq_init, NULL, "Lowest freq initialization failed" },
+	{ kbase_backend_time_init, NULL, "Time backend initialization failed" },
 	{ kbase_device_misc_init, kbase_device_misc_term,
 	  "Miscellaneous device initialization failed" },
 	{ kbase_device_pcm_dev_init, kbase_device_pcm_dev_term,
@@ -322,7 +317,11 @@ static const struct kbase_device_init dev_init[] = {
 	{ kbase_backend_late_init, kbase_backend_late_term, "Late backend initialization failed" },
 	{ kbase_csf_late_init, NULL, "Late CSF initialization failed" },
 	{ NULL, kbase_device_firmware_hwcnt_term, NULL },
+	{ kbase_debug_csf_fault_init, kbase_debug_csf_fault_term,
+	  "CSF fault debug initialization failed" },
 	{ kbase_device_debugfs_init, kbase_device_debugfs_term, "DebugFS initialization failed" },
+	{ kbase_csf_fence_timer_debugfs_init, kbase_csf_fence_timer_debugfs_term,
+	  "Fence timeout DebugFS initialization failed" },
 	/* Sysfs init needs to happen before registering the device with
 	 * misc_register(), otherwise it causes a race condition between
 	 * registering the device and a uevent event being generated for
@@ -341,10 +340,13 @@ static const struct kbase_device_init dev_init[] = {
 	{ kbase_gpuprops_populate_user_buffer, kbase_gpuprops_free_user_buffer,
 	  "GPU property population failed" },
 	{ kbase_device_late_init, kbase_device_late_term, "Late device initialization failed" },
+#if IS_ENABLED(CONFIG_MALI_CORESIGHT)
+	{ kbase_debug_coresight_csf_init, kbase_debug_coresight_csf_term,
+	  "Coresight initialization failed" },
+#endif /* IS_ENABLED(CONFIG_MALI_CORESIGHT) */
 };
 
-static void kbase_device_term_partial(struct kbase_device *kbdev,
-		unsigned int i)
+static void kbase_device_term_partial(struct kbase_device *kbdev, unsigned int i)
 {
 	while (i-- > 0) {
 		if (dev_init[i].term)
@@ -354,7 +356,6 @@ static void kbase_device_term_partial(struct kbase_device *kbdev,
 
 void kbase_device_term(struct kbase_device *kbdev)
 {
-	kbdev->csf.mali_file_inode = NULL;
 	kbase_device_term_partial(kbdev, ARRAY_SIZE(dev_init));
 	kbase_mem_halt(kbdev);
 }
@@ -373,8 +374,7 @@ int kbase_device_init(struct kbase_device *kbdev)
 		if (dev_init[i].init) {
 			err = dev_init[i].init(kbdev);
 			if (err) {
-				dev_err(kbdev->dev, "%s error = %d\n",
-					dev_init[i].err_mes, err);
+				dev_err(kbdev->dev, "%s error = %d\n", dev_init[i].err_mes, err);
 				kbase_device_term_partial(kbdev, i);
 				break;
 			}
@@ -407,42 +407,27 @@ static int kbase_device_hwcnt_csf_deferred_init(struct kbase_device *kbdev)
 	 */
 	ret = kbase_hwcnt_backend_csf_metadata_init(&kbdev->hwcnt_gpu_iface);
 	if (ret) {
-		dev_err(kbdev->dev,
-			"GPU hwcnt backend metadata creation failed");
+		dev_err(kbdev->dev, "GPU hwcnt backend metadata creation failed");
 		return ret;
 	}
 
-	ret = kbase_hwcnt_virtualizer_init(
-		kbdev->hwcnt_gpu_ctx,
-		KBASE_HWCNT_GPU_VIRTUALIZER_DUMP_THRESHOLD_NS,
-		&kbdev->hwcnt_gpu_virt);
+	ret = kbase_hwcnt_virtualizer_init(kbdev->hwcnt_gpu_ctx,
+					   KBASE_HWCNT_GPU_VIRTUALIZER_DUMP_THRESHOLD_NS,
+					   &kbdev->hwcnt_gpu_virt);
 	if (ret) {
-		dev_err(kbdev->dev,
-			"GPU hwcnt virtualizer initialization failed");
+		dev_err(kbdev->dev, "GPU hwcnt virtualizer initialization failed");
 		goto virt_fail;
 	}
 
-	ret = kbase_vinstr_init(kbdev->hwcnt_gpu_virt, &kbdev->vinstr_ctx);
+	ret = kbase_kinstr_prfcnt_init(kbdev->hwcnt_gpu_virt, &kbdev->kinstr_prfcnt_ctx);
 	if (ret) {
-		dev_err(kbdev->dev,
-			"Virtual instrumentation initialization failed");
-		goto vinstr_fail;
-	}
-
-	ret = kbase_kinstr_prfcnt_init(kbdev->hwcnt_gpu_virt,
-				       &kbdev->kinstr_prfcnt_ctx);
-	if (ret) {
-		dev_err(kbdev->dev,
-			"Performance counter instrumentation initialization failed");
+		dev_err(kbdev->dev, "Performance counter instrumentation initialization failed");
 		goto kinstr_prfcnt_fail;
 	}
 
 	return ret;
 
 kinstr_prfcnt_fail:
-	kbase_vinstr_term(kbdev->vinstr_ctx);
-
-vinstr_fail:
 	kbase_hwcnt_virtualizer_term(kbdev->hwcnt_gpu_virt);
 
 virt_fail:

@@ -196,7 +196,8 @@ enum aec_ref_source {
 	BT_PLAYBACK,
 	NUM_AEC_REF_SOURCE
 };
-enum { INCALL_CAPTURE_OFF = 0, INCALL_CAPTURE_UL, INCALL_CAPTURE_DL, INCALL_CAPTURE_UL_DL };
+enum { INCALL_CAPTURE_OFF = 0, INCALL_CAPTURE_UL, INCALL_CAPTURE_DL, INCALL_CAPTURE_UL_DL,
+	INCALL_CAPTURE_3MIC };
 enum { NONBLOCKING = 0, BLOCKING = 1 };
 enum { STOP = 0, START };
 enum { PLAYBACK_MODE, VOICE_TX_MODE, VOICE_RX_MODE, HAPTICS_MODE, OFFLOAD_MODE };
@@ -266,6 +267,9 @@ struct aoc_chip {
 	long pcm_wait_time_in_ms;
 	long voice_pcm_wait_time_in_ms;
 
+	bool hotword_supported;
+	bool chre_supported;
+
 	struct AUDIO_OUTPUT_BT_A2DP_ENC_CFG a2dp_encoder_cfg;
 	struct CMD_AUDIO_OUTPUT_USB_CONFIG usb_sink_cfg;
 	struct CMD_AUDIO_OUTPUT_USB_CONFIG_V2 usb_sink_cfg_v2;
@@ -300,11 +304,15 @@ struct aoc_alsa_stream {
 	int params_rate; /* Sampling rate */
 	int pcm_format_width; /* Number of bits */
 	bool pcm_float_fmt; /* Floating point */
+	bool reused_for_voip;
 
 	struct vm_area_struct *vma; /* for MMAP */
 	unsigned int period_size;
 	unsigned int buffer_size;
 	unsigned int pos;
+	unsigned int prev_pos;
+	unsigned int pos_delta;
+	unsigned long prev_buffer_cnt;
 	unsigned long hw_ptr_base; /* read/write pointers in ring buffer */
 	unsigned long prev_consumed;
 	int n_overflow;
@@ -314,6 +322,9 @@ struct aoc_alsa_stream {
 	int wq_busy_count;
 
 	struct work_struct free_aoc_service_work;
+	struct workqueue_struct *pcm_period_wq;
+	struct workqueue_struct *incall_period_wq;
+	struct workqueue_struct *voip_period_wq;
 	struct work_struct pcm_period_work;
 };
 
@@ -323,6 +334,7 @@ void aoc_timer_restart(struct aoc_alsa_stream *alsa_stream);
 void aoc_timer_stop(struct aoc_alsa_stream *alsa_stream);
 void aoc_timer_stop_sync(struct aoc_alsa_stream *alsa_stream);
 void aoc_pcm_period_work_handler(struct work_struct *work);
+bool aoc_pcm_update_pos(struct aoc_alsa_stream *alsa_stream, unsigned long consumed);
 
 int snd_aoc_new_ctl(struct aoc_chip *chip);
 int snd_aoc_new_pcm(struct aoc_chip *chip);
@@ -375,11 +387,8 @@ int ap_record_stop(struct aoc_chip *chip, struct aoc_alsa_stream *alsa_stream);
 int aoc_capture_filter_runtime_control(struct aoc_chip *chip, uint32_t port_id, bool on);
 int aoc_audio_capture_runtime_trigger(struct aoc_chip *chip, int ep_id, int dst, bool on);
 int aoc_audio_capture_eraser_enable(struct aoc_chip *chip, long enable);
-#if ! IS_ENABLED(CONFIG_SOC_GS101)
 int aoc_hotword_tap_enable(struct aoc_chip *chip, long enable);
-#endif
 int aoc_eraser_aec_reference_set(struct aoc_chip *chip, long ref_source);
-
 int aoc_load_cca_module(struct aoc_chip *chip, long load);
 
 int aoc_voice_call_mic_mute(struct aoc_chip *chip, int mute);
@@ -475,6 +484,7 @@ int aoc_incall_init(void);
 void aoc_incall_exit(void);
 int aoc_voip_init(void);
 void aoc_voip_exit(void);
+int aoc_audio_mic_mask_set(struct aoc_chip *chip, bool is_voice);
 
 int aoc_audio_us_record(struct aoc_chip *chip, bool enable);
 #endif

@@ -160,6 +160,13 @@ static void list_enrolled_buffers(struct lwis_client *client, char *k_buf, size_
 	hash_for_each (client->enrolled_buffers, i, enrollment_list, node) {
 		list_for_each (it_enrollment, &enrollment_list->list) {
 			buffer = list_entry(it_enrollment, struct lwis_enrolled_buffer, list_node);
+			if (IS_ERR_VALUE(buffer->info.dma_vaddr)) {
+				scnprintf(tmp_buf, sizeof(tmp_buf),
+					  "Enrolled buffers: dma_vaddr %pad is invalid\n",
+					  &buffer->info.dma_vaddr);
+				strlcat(k_buf, tmp_buf, k_buf_size);
+				continue;
+			}
 			end_dma_vaddr = buffer->info.dma_vaddr + (buffer->dma_buf->size - 1);
 			scnprintf(tmp_buf, sizeof(tmp_buf),
 				  "[%2d] FD: %d Mode: %s%s Addr:[%pad ~ %pad] Size: %zu\n", idx++,
@@ -296,15 +303,15 @@ static int generate_buffer_info(struct lwis_device *lwis_dev, char *buffer, size
 		return 0;
 	}
 
-	spin_lock_irqsave(&lwis_dev->lock, flags);
 	list_for_each_entry (client, &lwis_dev->clients, node) {
 		scnprintf(tmp_buf, sizeof(tmp_buf), "Client %d:\n", idx);
 		strlcat(buffer, tmp_buf, buffer_size);
+		spin_lock_irqsave(&client->buffer_lock, flags);
 		list_allocated_buffers(client, buffer, buffer_size);
 		list_enrolled_buffers(client, buffer, buffer_size);
+		spin_unlock_irqrestore(&client->buffer_lock, flags);
 		idx++;
 	}
-	spin_unlock_irqrestore(&lwis_dev->lock, flags);
 
 	return 0;
 }

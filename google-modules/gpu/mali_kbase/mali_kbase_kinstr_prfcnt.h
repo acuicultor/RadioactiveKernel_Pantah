@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 /*
  *
- * (C) COPYRIGHT 2021-2022 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2021-2023 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -26,7 +26,7 @@
 #ifndef _KBASE_KINSTR_PRFCNT_H_
 #define _KBASE_KINSTR_PRFCNT_H_
 
-#include "mali_kbase_hwcnt_types.h"
+#include "hwcnt/mali_kbase_hwcnt_types.h"
 #include <uapi/gpu/arm/midgard/mali_kbase_hwcnt_reader.h>
 
 struct kbase_kinstr_prfcnt_context;
@@ -46,9 +46,8 @@ union kbase_ioctl_kinstr_prfcnt_setup;
  *
  * Return: 0 on success, else error code.
  */
-int kbase_kinstr_prfcnt_init(
-	struct kbase_hwcnt_virtualizer *hvirt,
-	struct kbase_kinstr_prfcnt_context **out_kinstr_ctx);
+int kbase_kinstr_prfcnt_init(struct kbase_hwcnt_virtualizer *hvirt,
+			     struct kbase_kinstr_prfcnt_context **out_kinstr_ctx);
 
 /**
  * kbase_kinstr_prfcnt_term() - Terminate a kinstr_prfcnt context.
@@ -80,7 +79,6 @@ void kbase_kinstr_prfcnt_suspend(struct kbase_kinstr_prfcnt_context *kinstr_ctx)
  */
 void kbase_kinstr_prfcnt_resume(struct kbase_kinstr_prfcnt_context *kinstr_ctx);
 
-#if MALI_KERNEL_TEST_API
 /**
  * kbasep_kinstr_prfcnt_get_block_info_list() - Get list of all block types
  *                                              with their information.
@@ -158,7 +156,6 @@ int kbasep_kinstr_prfcnt_cmd(struct kbase_kinstr_prfcnt_client *cli,
  * @cli: kinstr_prfcnt client. Must not be attached to a kinstr_prfcnt context.
  */
 void kbasep_kinstr_prfcnt_client_destroy(struct kbase_kinstr_prfcnt_client *cli);
-#endif /* MALI_KERNEL_TEST_API */
 
 /**
  * kbase_kinstr_prfcnt_enum_info - Enumerate performance counter information.
@@ -170,9 +167,8 @@ void kbasep_kinstr_prfcnt_client_destroy(struct kbase_kinstr_prfcnt_client *cli)
  *
  * Return: 0 on success, else error code.
  */
-int kbase_kinstr_prfcnt_enum_info(
-	struct kbase_kinstr_prfcnt_context *kinstr_ctx,
-	struct kbase_ioctl_kinstr_prfcnt_enum_info *enum_info);
+int kbase_kinstr_prfcnt_enum_info(struct kbase_kinstr_prfcnt_context *kinstr_ctx,
+				  struct kbase_ioctl_kinstr_prfcnt_enum_info *enum_info);
 
 /**
  * kbase_kinstr_prfcnt_setup() - Set up a new hardware counter reader client.
@@ -187,5 +183,20 @@ int kbase_kinstr_prfcnt_enum_info(
  */
 int kbase_kinstr_prfcnt_setup(struct kbase_kinstr_prfcnt_context *kinstr_ctx,
 			      union kbase_ioctl_kinstr_prfcnt_setup *setup);
+
+/**
+ * kbasep_kinstr_populate_prfcnt_enum_list() - Populate the enumeration output list.
+ * @metadata:   Hardware counter metadata
+ * @item_array: Pointer to a pre-allocated array for populating the enumeration items
+ * @array_size: The array size of the item_array. Must match the corresponding metadata
+ *              enumeration number of items.
+ *
+ * The function converts the configured hardware counter metadata into perfcnt enumeration
+ * items and populate them into the supplied recipient array.
+ *
+ * Return: 0 on success, else -EINVAL on misconfigured input fields or mismatched array length.
+ */
+int kbasep_kinstr_populate_prfcnt_enum_list(const struct kbase_hwcnt_metadata *metadata,
+					    struct prfcnt_enum_item *item_array, size_t array_size);
 
 #endif /* _KBASE_KINSTR_PRFCNT_H_ */

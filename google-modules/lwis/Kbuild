@@ -24,6 +24,8 @@ lwis-objs += lwis_io_entry.o
 lwis-objs += lwis_allocator.o
 lwis-objs += lwis_version.o
 lwis-objs += lwis_fence.o
+lwis-objs += lwis_i2c_bus_manager.o
+lwis-objs += lwis_i2c_sched.o
 
 # Anchorage specific files
 ifeq ($(CONFIG_SOC_GS101), y)

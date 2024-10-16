@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 /*
  *
- * (C) COPYRIGHT 2020-2022 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2020-2024 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -64,10 +64,54 @@
  * - Added ioctl to query a register of USER page.
  * 1.14:
  * - Added support for passing down the buffer descriptor VA in tiler heap init
+ * 1.15:
+ * - Enable new sync_wait GE condition
+ * 1.16:
+ * - Remove legacy definitions:
+ *   - base_jit_alloc_info_10_2
+ *   - base_jit_alloc_info_11_5
+ *   - kbase_ioctl_mem_jit_init_10_2
+ *   - kbase_ioctl_mem_jit_init_11_5
+ * 1.17:
+ * - Fix kinstr_prfcnt issues:
+ *   - Missing implicit sample for CMD_STOP when HWCNT buffer is full.
+ *   - Race condition when stopping periodic sampling.
+ *   - prfcnt_block_metadata::block_idx gaps.
+ *   - PRFCNT_CONTROL_CMD_SAMPLE_ASYNC is removed.
+ * 1.18:
+ * - Relax the requirement to create a mapping with BASE_MEM_MAP_TRACKING_HANDLE
+ *   before allocating GPU memory for the context.
+ * - CPU mappings of USER_BUFFER imported memory handles must be cached.
+ * 1.19:
+ * - Add NE support in queue_group_create IOCTL fields
+ * - Previous version retained as KBASE_IOCTL_CS_QUEUE_GROUP_CREATE_1_18 for
+ *     backward compatibility.
+ * 1.20:
+ * - Restrict child process from doing supported file operations (like mmap, ioctl,
+ *   read, poll) on the file descriptor of mali device file that was inherited
+ *   from the parent process.
+ * 1.21:
+ * - Remove KBASE_IOCTL_HWCNT_READER_SETUP and KBASE_HWCNT_READER_* ioctls.
+ * 1.22:
+ * - Add comp_pri_threshold and comp_pri_ratio attributes to
+ *   kbase_ioctl_cs_queue_group_create.
+ * - Made the BASE_MEM_DONT_NEED memory flag queryable.
+ * 1.23:
+ * - Disallows changing the sharability on the GPU of imported dma-bufs to
+ *   BASE_MEM_COHERENT_SYSTEM using KBASE_IOCTL_MEM_FLAGS_CHANGE.
+ * 1.24:
+ * - Implement full block state support for hardware counters.
+ * 1.25:
+ * - Add support for CS_FAULT reporting to userspace
+ * 1.26:
+ * - Made the BASE_MEM_IMPORT_SYNC_ON_MAP_UNMAP and BASE_MEM_KERNEL_SYNC memory
+ *   flags queryable.
+ * 1.27:
+ * - Implement support for HWC block state availability.
  */
 
 #define BASE_UK_VERSION_MAJOR 1
-#define BASE_UK_VERSION_MINOR 14
+#define BASE_UK_VERSION_MINOR 27
 
 /**
  * struct kbase_ioctl_version_check - Check version compatibility between
@@ -116,8 +160,7 @@ struct kbase_ioctl_cs_queue_kick {
 	__u64 buffer_gpu_addr;
 };
 
-#define KBASE_IOCTL_CS_QUEUE_KICK \
-	_IOW(KBASE_IOCTL_TYPE, 37, struct kbase_ioctl_cs_queue_kick)
+#define KBASE_IOCTL_CS_QUEUE_KICK _IOW(KBASE_IOCTL_TYPE, 37, struct kbase_ioctl_cs_queue_kick)
 
 /**
  * union kbase_ioctl_cs_queue_bind - Bind a GPU command queue to a group
@@ -143,8 +186,7 @@ union kbase_ioctl_cs_queue_bind {
 	} out;
 };
 
-#define KBASE_IOCTL_CS_QUEUE_BIND \
-	_IOWR(KBASE_IOCTL_TYPE, 39, union kbase_ioctl_cs_queue_bind)
+#define KBASE_IOCTL_CS_QUEUE_BIND _IOWR(KBASE_IOCTL_TYPE, 39, union kbase_ioctl_cs_queue_bind)
 
 /**
  * struct kbase_ioctl_cs_queue_register_ex - Register a GPU command queue with the
@@ -236,11 +278,11 @@ union kbase_ioctl_cs_queue_group_create_1_6 {
 	} out;
 };
 
-#define KBASE_IOCTL_CS_QUEUE_GROUP_CREATE_1_6                                  \
+#define KBASE_IOCTL_CS_QUEUE_GROUP_CREATE_1_6 \
 	_IOWR(KBASE_IOCTL_TYPE, 42, union kbase_ioctl_cs_queue_group_create_1_6)
 
 /**
- * union kbase_ioctl_cs_queue_group_create - Create a GPU command queue group
+ * union kbase_ioctl_cs_queue_group_create_1_18 - Create a GPU command queue group
  * @in:               Input parameters
  * @in.tiler_mask:    Mask of tiler endpoints the group is allowed to use.
  * @in.fragment_mask: Mask of fragment endpoints the group is allowed to use.
@@ -262,7 +304,7 @@ union kbase_ioctl_cs_queue_group_create_1_6 {
  * @out.padding:      Currently unused, must be zero
  * @out.group_uid:    UID of the queue group available to base.
  */
-union kbase_ioctl_cs_queue_group_create {
+union kbase_ioctl_cs_queue_group_create_1_18 {
 	struct {
 		__u64 tiler_mask;
 		__u64 fragment_mask;
@@ -275,9 +317,9 @@ union kbase_ioctl_cs_queue_group_create {
 		__u8 csi_handlers;
 		__u8 padding[2];
 		/**
-		 * @in.reserved: Reserved
+		 * @in.dvs_buf: buffer for deferred vertex shader
 		 */
-		__u64 reserved;
+		__u64 dvs_buf;
 	} in;
 	struct {
 		__u8 group_handle;
@@ -286,7 +328,64 @@ union kbase_ioctl_cs_queue_group_create {
 	} out;
 };
 
-#define KBASE_IOCTL_CS_QUEUE_GROUP_CREATE                                      \
+#define KBASE_IOCTL_CS_QUEUE_GROUP_CREATE_1_18 \
+	_IOWR(KBASE_IOCTL_TYPE, 58, union kbase_ioctl_cs_queue_group_create_1_18)
+
+/**
+ * union kbase_ioctl_cs_queue_group_create - Create a GPU command queue group
+ * @in:               Input parameters
+ * @in.tiler_mask:    Mask of tiler endpoints the group is allowed to use.
+ * @in.fragment_mask: Mask of fragment endpoints the group is allowed to use.
+ * @in.compute_mask:  Mask of compute endpoints the group is allowed to use.
+ * @in.cs_min:        Minimum number of CSs required.
+ * @in.priority:      Queue group's priority within a process.
+ * @in.tiler_max:     Maximum number of tiler endpoints the group is allowed
+ *                    to use.
+ * @in.fragment_max:  Maximum number of fragment endpoints the group is
+ *                    allowed to use.
+ * @in.compute_max:   Maximum number of compute endpoints the group is allowed
+ *                    to use.
+ * @in.csi_handlers:  Flags to signal that the application intends to use CSI
+ *                    exception handlers in some linear buffers to deal with
+ *                    the given exception types.
+ * @in.cs_fault_report_enable:  Flag to indicate reporting of CS_FAULTs
+ *                    to userspace.
+ * @in.padding:       Currently unused, must be zero
+ * @out:              Output parameters
+ * @out.group_handle: Handle of a newly created queue group.
+ * @out.padding:      Currently unused, must be zero
+ * @out.group_uid:    UID of the queue group available to base.
+ */
+union kbase_ioctl_cs_queue_group_create {
+	struct {
+		__u64 tiler_mask;
+		__u64 fragment_mask;
+		__u64 compute_mask;
+		__u8 cs_min;
+		__u8 priority;
+		__u8 tiler_max;
+		__u8 fragment_max;
+		__u8 compute_max;
+		__u8 csi_handlers;
+		/**
+		 * @in.reserved:   Reserved, currently unused, must be zero.
+		 */
+		__u8 reserved;
+		__u8 cs_fault_report_enable;
+		/**
+		 * @in.dvs_buf: buffer for deferred vertex shader
+		 */
+		__u64 dvs_buf;
+		__u64 padding[9];
+	} in;
+	struct {
+		__u8 group_handle;
+		__u8 padding[3];
+		__u32 group_uid;
+	} out;
+};
+
+#define KBASE_IOCTL_CS_QUEUE_GROUP_CREATE \
 	_IOWR(KBASE_IOCTL_TYPE, 58, union kbase_ioctl_cs_queue_group_create)
 
 /**
@@ -303,8 +402,7 @@ struct kbase_ioctl_cs_queue_group_term {
 #define KBASE_IOCTL_CS_QUEUE_GROUP_TERMINATE \
 	_IOW(KBASE_IOCTL_TYPE, 43, struct kbase_ioctl_cs_queue_group_term)
 
-#define KBASE_IOCTL_CS_EVENT_SIGNAL \
-	_IO(KBASE_IOCTL_TYPE, 44)
+#define KBASE_IOCTL_CS_EVENT_SIGNAL _IO(KBASE_IOCTL_TYPE, 44)
 
 typedef __u8 base_kcpu_queue_id; /* We support up to 256 active KCPU queues */
 
@@ -319,8 +417,7 @@ struct kbase_ioctl_kcpu_queue_new {
 	__u8 padding[7];
 };
 
-#define KBASE_IOCTL_KCPU_QUEUE_CREATE \
-	_IOR(KBASE_IOCTL_TYPE, 45, struct kbase_ioctl_kcpu_queue_new)
+#define KBASE_IOCTL_KCPU_QUEUE_CREATE _IOR(KBASE_IOCTL_TYPE, 45, struct kbase_ioctl_kcpu_queue_new)
 
 /**
  * struct kbase_ioctl_kcpu_queue_delete - Destroy a KCPU command queue
@@ -426,7 +523,7 @@ union kbase_ioctl_cs_tiler_heap_init_1_13 {
 	} out;
 };
 
-#define KBASE_IOCTL_CS_TILER_HEAP_INIT_1_13                                                        \
+#define KBASE_IOCTL_CS_TILER_HEAP_INIT_1_13 \
 	_IOWR(KBASE_IOCTL_TYPE, 48, union kbase_ioctl_cs_tiler_heap_init_1_13)
 
 /**
@@ -485,16 +582,14 @@ union kbase_ioctl_cs_get_glb_iface {
 	} out;
 };
 
-#define KBASE_IOCTL_CS_GET_GLB_IFACE \
-	_IOWR(KBASE_IOCTL_TYPE, 51, union kbase_ioctl_cs_get_glb_iface)
+#define KBASE_IOCTL_CS_GET_GLB_IFACE _IOWR(KBASE_IOCTL_TYPE, 51, union kbase_ioctl_cs_get_glb_iface)
 
 struct kbase_ioctl_cs_cpu_queue_info {
 	__u64 buffer;
 	__u64 size;
 };
 
-#define KBASE_IOCTL_VERSION_CHECK \
-	_IOWR(KBASE_IOCTL_TYPE, 52, struct kbase_ioctl_version_check)
+#define KBASE_IOCTL_VERSION_CHECK _IOWR(KBASE_IOCTL_TYPE, 52, struct kbase_ioctl_version_check)
 
 #define KBASE_IOCTL_CS_CPU_QUEUE_DUMP \
 	_IOW(KBASE_IOCTL_TYPE, 53, struct kbase_ioctl_cs_cpu_queue_info)
@@ -552,6 +647,22 @@ union kbase_ioctl_read_user_page {
 };
 
 #define KBASE_IOCTL_READ_USER_PAGE _IOWR(KBASE_IOCTL_TYPE, 60, union kbase_ioctl_read_user_page)
+
+/**
+ * struct kbase_ioctl_queue_group_clear_faults - Re-enable CS FAULT reporting for the GPU queues
+ *
+ * @addr: CPU VA to an array of GPU VAs of the buffers backing the queues
+ * @nr_queues: Number of queues in the array
+ * @padding: Padding to round up to a multiple of 8 bytes, must be zero
+ */
+struct kbase_ioctl_queue_group_clear_faults {
+	__u64 addr;
+	__u32 nr_queues;
+	__u8 padding[4];
+};
+
+#define KBASE_IOCTL_QUEUE_GROUP_CLEAR_FAULTS \
+	_IOW(KBASE_IOCTL_TYPE, 61, struct kbase_ioctl_queue_group_clear_faults)
 
 /***************
  * test ioctls *

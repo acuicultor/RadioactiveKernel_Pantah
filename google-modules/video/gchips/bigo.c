@@ -239,6 +239,12 @@ static int bigo_run_job(struct bigo_core *core, struct bigo_job *job)
 			msecs_to_jiffies(JOB_COMPLETE_TIMEOUT_MS));
 	if (!ret) {
 		pr_err("timed out waiting for HW\n");
+		pr_err("last rd addr: 0x%x, last_wr_addr: 0x%x\n",
+			bigo_core_readl(core, BIGO_REG_LAST_RD_AXI_ADDR),
+			bigo_core_readl(core, BIGO_REG_LAST_WR_AXI_ADDR));
+		pr_err("last rd addr: 0x%x, last_wr_addr: 0x%x\n",
+			bigo_core_readl(core, BIGO_REG_LAST_RD_AXI_ADDR),
+			bigo_core_readl(core, BIGO_REG_LAST_WR_AXI_ADDR));
 
 		spin_lock_irqsave(&core->status_lock, flags);
 		core->stat_with_irq = bigo_core_readl(core, BIGO_REG_STAT);
@@ -388,7 +394,8 @@ static long bigo_unlocked_ioctl(struct file *file, unsigned int cmd,
 
 		if (copy_regs_from_user(core, &desc, user_desc, job)) {
 			pr_err("Failed to copy regs from user\n");
-			return -EFAULT;
+			rc = -EFAULT;
+			break;
 		}
 
 		hbd = (((u32*)job->regs)[3]) & BIGO_HBD_BIT;
@@ -400,7 +407,8 @@ static long bigo_unlocked_ioctl(struct file *file, unsigned int cmd,
 
 		if(enqueue_prioq(core, inst)) {
 			pr_err("Failed enqueue frame\n");
-			return -EFAULT;
+			rc = -EFAULT;
+			break;
 		}
 
 		ret = wait_for_completion_timeout(
@@ -427,7 +435,8 @@ static long bigo_unlocked_ioctl(struct file *file, unsigned int cmd,
 	case BIGO_IOCX_MAP:
 		if (copy_from_user(&mapping, user_desc, sizeof(mapping))) {
 			pr_err("Failed to copy from user\n");
-			return -EFAULT;
+			rc = -EFAULT;
+			break;
 		}
 		rc = bigo_map(core, inst, &mapping);
 		if (rc)
@@ -440,7 +449,8 @@ static long bigo_unlocked_ioctl(struct file *file, unsigned int cmd,
 	case BIGO_IOCX_UNMAP:
 		if (copy_from_user(&mapping, user_desc, sizeof(mapping))) {
 			pr_err("Failed to copy from user\n");
-			return -EFAULT;
+			rc = -EFAULT;
+			break;
 		}
 		rc = bigo_unmap(inst, &mapping);
 		if (rc)
@@ -455,7 +465,8 @@ static long bigo_unlocked_ioctl(struct file *file, unsigned int cmd,
 	case BIGO_IOCX_CONFIG_FRMSIZE:
 		if (copy_from_user(&frmsize, user_desc, sizeof(frmsize))) {
 			pr_err("Failed to copy from user\n");
-			return -EFAULT;
+			rc = -EFAULT;
+			break;
 		}
 		bigo_config_frmsize(inst, &frmsize);
 		break;

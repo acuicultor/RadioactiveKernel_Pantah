@@ -80,4 +80,9 @@ int lwis_create_kthread_workers(struct lwis_device *lwis_dev);
  */
 int lwis_set_kthread_priority(struct lwis_device *lwis_dev, struct task_struct *task, u32 priority);
 
+/*
+ * lwis_check_device_type: Returns true if the passed lwis_device's type is same as 'type'
+ */
+bool lwis_check_device_type(struct lwis_device *lwis_dev, int32_t type);
+
 #endif // LWIS_UTIL_H_

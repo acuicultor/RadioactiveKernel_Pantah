@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 /*
  *
- * (C) COPYRIGHT 2020-2022 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2020-2023 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -48,22 +48,11 @@
 /* Bitmask of valid chunk sizes. This is also the maximum chunk size, in bytes.
  */
 #define CHUNK_SIZE_MASK \
-	((CHUNK_HDR_NEXT_SIZE_MASK >> CHUNK_HDR_NEXT_SIZE_POS) << \
-	 CHUNK_HDR_NEXT_SIZE_ENCODE_SHIFT)
+	((CHUNK_HDR_NEXT_SIZE_MASK >> CHUNK_HDR_NEXT_SIZE_POS) << CHUNK_HDR_NEXT_SIZE_ENCODE_SHIFT)
 
 /* Bitmask of valid chunk addresses. This is also the highest address. */
 #define CHUNK_ADDR_MASK \
-	((CHUNK_HDR_NEXT_ADDR_MASK >> CHUNK_HDR_NEXT_ADDR_POS) << \
-	 CHUNK_HDR_NEXT_ADDR_ENCODE_SHIFT)
-
-/* Tiler heap shrink stop limit for maintaining a minimum number of chunks */
-#define HEAP_SHRINK_STOP_LIMIT (1)
-
-/* Tiler heap shrinker seek value, needs to be higher than jit and memory pools */
-#define HEAP_SHRINKER_SEEKS (DEFAULT_SEEKS + 2)
-
-/* Tiler heap shrinker batch value */
-#define HEAP_SHRINKER_BATCH (512)
+	((CHUNK_HDR_NEXT_ADDR_MASK >> CHUNK_HDR_NEXT_ADDR_POS) << CHUNK_HDR_NEXT_ADDR_ENCODE_SHIFT)
 
 /* The size of the area needed to be vmapped prior to handing the tiler heap
  * over to the tiler, so that the shrinker could be invoked.
@@ -127,9 +116,7 @@ struct kbase_csf_tiler_heap_chunk {
  * @target_in_flight: Number of render-passes that the driver should attempt
  *                    to keep in flight for which allocation of new chunks is
  *                    allowed. Must not be zero.
- * @desc_chk_flags:  Runtime sanity check flags on heap chunk reclaim.
- * @desc_chk_cnt:    Counter for providing a deferral gap if runtime sanity check
- *                   needs to be retried later.
+ * @buf_desc_checked: Indicates if runtime check on buffer descriptor has been done.
  */
 struct kbase_csf_tiler_heap {
 	struct kbase_context *kctx;
@@ -145,40 +132,7 @@ struct kbase_csf_tiler_heap {
 	u32 chunk_count;
 	u32 max_chunks;
 	u16 target_in_flight;
-	u8 desc_chk_flags;
-	u8 desc_chk_cnt;
-};
-
-/**
- * struct kbase_csf_gpu_buffer_heap - A gpu buffer object specific to tiler heap
- *
- * @cdsbp_0:       Descriptor_type and buffer_type
- * @size:          The size of the current heap chunk
- * @pointer:       Pointer to the current heap chunk
- * @low_pointer:   Pointer to low end of current heap chunk
- * @high_pointer:  Pointer to high end of current heap chunk
- */
-struct kbase_csf_gpu_buffer_heap {
-	u32 cdsbp_0;
-	u32 size;
-	u64 pointer;
-	u64 low_pointer;
-	u64 high_pointer;
-} __packed;
-
-/**
- * struct kbase_csf_tiler_heap_shrink_control - Kbase wraper object that wraps around
- *                                              kernel shrink_control
- *
- * @sc:          Pointer to shrinker control object in reclaim callback.
- * @count_cb:    Functin pointer for counting tiler heap free list.
- * @scan_cb:     Functin pointer for counting tiler heap free list.
- */
-
-struct kbase_csf_tiler_heap_shrink_control {
-	struct shrink_control *sc;
-	u32 (*count_cb)(struct kbase_context *kctx);
-	u32 (*scan_cb)(struct kbase_context *kctx, u32 pages);
+	bool buf_desc_checked;
 };
 
 #endif /* !_KBASE_CSF_TILER_HEAP_DEF_H_ */

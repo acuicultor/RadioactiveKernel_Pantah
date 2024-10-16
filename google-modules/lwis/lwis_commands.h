@@ -159,7 +159,9 @@ enum lwis_io_entry_types {
 	LWIS_IO_ENTRY_WRITE_BATCH,
 	LWIS_IO_ENTRY_MODIFY,
 	LWIS_IO_ENTRY_POLL,
-	LWIS_IO_ENTRY_READ_ASSERT
+	LWIS_IO_ENTRY_READ_ASSERT,
+	LWIS_IO_ENTRY_POLL_SHORT,
+	LWIS_IO_ENTRY_WAIT
 };
 
 // For io_entry read and write types.
@@ -201,6 +203,7 @@ struct lwis_io_entry {
 		struct lwis_io_entry_rw_batch rw_batch;
 		struct lwis_io_entry_modify mod;
 		struct lwis_io_entry_read_assert read_assert;
+		uint64_t wait_us;
 	};
 };
 

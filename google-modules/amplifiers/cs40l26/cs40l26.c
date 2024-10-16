@@ -466,6 +466,10 @@ int cs40l26_pm_state_transition(struct cs40l26_private *cs40l26,
 		ATRACE_BEGIN("CS40L26_PM_STATE_WAKEUP");
 		ret = cs40l26_ack_write(cs40l26, CS40L26_DSP_VIRTUAL1_MBOX_1,
 				cmd, CS40L26_DSP_MBOX_RESET);
+#if IS_ENABLED(CONFIG_GOOG_CUST)
+		if (ret)
+			dev_err(dev, "CS40L26_PM_STATE_WAKEUP failed");
+#endif
 		if (ret)
 			return ret;
 
@@ -479,11 +483,19 @@ int cs40l26_pm_state_transition(struct cs40l26_private *cs40l26,
 					CS40L26_DSP_VIRTUAL1_MBOX_1,
 					cmd, CS40L26_DSP_MBOX_RESET);
 			if (ret)
+#if IS_ENABLED(CONFIG_GOOG_CUST)
+				break;
+#else
 				return ret;
+#endif
 
 			ret = cs40l26_dsp_state_get(cs40l26, &curr_state);
 			if (ret)
+#if IS_ENABLED(CONFIG_GOOG_CUST)
+				break;
+#else
 				return ret;
+#endif
 
 			if (curr_state == CS40L26_DSP_STATE_ACTIVE)
 				break;
@@ -491,13 +503,24 @@ int cs40l26_pm_state_transition(struct cs40l26_private *cs40l26,
 			if (curr_state == CS40L26_DSP_STATE_STANDBY) {
 				ret = cs40l26_check_pm_lock(cs40l26, &dsp_lock);
 				if (ret)
+#if IS_ENABLED(CONFIG_GOOG_CUST)
+					break;
+#else
 					return ret;
+#endif
 
 				if (dsp_lock)
 					break;
 			}
 			usleep_range(5000, 5100);
 		}
+
+#if IS_ENABLED(CONFIG_GOOG_CUST)
+		if (ret) {
+			dev_err(dev, "CS40L26_PM_STATE_PREVENT_HIBERNATE failed");
+			return ret;
+		}
+#endif
 
 		if (i == CS40L26_DSP_STATE_ATTEMPTS) {
 			dev_err(cs40l26->dev, "DSP not starting\n");
@@ -511,6 +534,10 @@ int cs40l26_pm_state_transition(struct cs40l26_private *cs40l26,
 		cs40l26->wksrc_sts = 0x00;
 		ret = cs40l26_dsp_write(cs40l26, CS40L26_DSP_VIRTUAL1_MBOX_1,
 				cmd);
+#if IS_ENABLED(CONFIG_GOOG_CUST)
+		if (ret)
+			dev_err(dev, "CS40L26_PM_STATE_ALLOW_HIBERNATE failed");
+#endif
 		if (ret)
 			return ret;
 
@@ -519,6 +546,10 @@ int cs40l26_pm_state_transition(struct cs40l26_private *cs40l26,
 		cs40l26->wksrc_sts = 0x00;
 		ret = cs40l26_ack_write(cs40l26, CS40L26_DSP_VIRTUAL1_MBOX_1,
 			cmd, CS40L26_DSP_MBOX_RESET);
+#if IS_ENABLED(CONFIG_GOOG_CUST)
+		if (ret)
+			dev_err(dev, "CS40L26_PM_STATE_SHUTDOWN failed");
+#endif
 
 		break;
 	default:
@@ -887,6 +918,14 @@ void cs40l26_vibe_state_update(struct cs40l26_private *cs40l26,
 	case CS40L26_VIBE_STATE_EVENT_MBOX_PLAYBACK:
 	case CS40L26_VIBE_STATE_EVENT_GPIO_TRIGGER:
 		cs40l26_remove_asp_scaling(cs40l26);
+#if IS_ENABLED(CONFIG_GOOG_CUST)
+		if (cs40l26->effects_in_flight > 0) {
+			cs40l26->reset_event = CS40L26_RESET_EVENT_TRIGGER;
+			dev_err(cs40l26->dev,
+				"Invalid effects_in_flight (%d)! Reset at the next chip resume.",
+				cs40l26->effects_in_flight);
+		}
+#endif
 		cs40l26->effects_in_flight = cs40l26->effects_in_flight <= 0 ? 1 :
 			cs40l26->effects_in_flight + 1;
 		break;
@@ -1918,6 +1957,10 @@ static void cs40l26_set_gain_worker(struct work_struct *work)
 err_mutex:
 	mutex_unlock(&cs40l26->lock);
 	cs40l26_pm_exit(cs40l26->dev);
+#if IS_ENABLED(CONFIG_GOOG_CUST)
+	if (ret < 0)
+		cs40l26_make_reset_decision(cs40l26, __func__);
+#endif
 }
 
 static void cs40l26_vibe_start_worker(struct work_struct *work)
@@ -2011,6 +2054,10 @@ err_mutex:
 	mutex_unlock(&cs40l26->lock);
 
 	cs40l26_pm_exit(dev);
+#if IS_ENABLED(CONFIG_GOOG_CUST)
+	if (ret < 0)
+		cs40l26_make_reset_decision(cs40l26, __func__);
+#endif
 }
 
 static void cs40l26_vibe_stop_worker(struct work_struct *work)
@@ -2061,6 +2108,10 @@ static void cs40l26_vibe_stop_worker(struct work_struct *work)
 mutex_exit:
 	mutex_unlock(&cs40l26->lock);
 	cs40l26_pm_exit(cs40l26->dev);
+#if IS_ENABLED(CONFIG_GOOG_CUST)
+	if (ret < 0)
+		cs40l26_make_reset_decision(cs40l26, __func__);
+#endif
 }
 
 static void cs40l26_set_gain(struct input_dev *dev, u16 gain)
@@ -2111,9 +2162,15 @@ int cs40l26_get_num_waves(struct cs40l26_private *cs40l26, u32 *num_waves)
 	int ret;
 	u32 reg, nwaves, nowt;
 
+#if IS_ENABLED(CONFIG_GOOG_CUST)
+	mutex_lock(&cs40l26->cl_dsp_lock);
+#endif
 	ret = cl_dsp_get_reg(cs40l26->dsp, "NUM_OF_WAVES",
 			CL_DSP_XM_UNPACKED_TYPE,
 			CS40L26_VIBEGEN_ALGO_ID, &reg);
+#if IS_ENABLED(CONFIG_GOOG_CUST)
+	mutex_unlock(&cs40l26->cl_dsp_lock);
+#endif
 	if (ret)
 		return ret;
 
@@ -2121,8 +2178,14 @@ int cs40l26_get_num_waves(struct cs40l26_private *cs40l26, u32 *num_waves)
 	if (ret)
 		return ret;
 
+#if IS_ENABLED(CONFIG_GOOG_CUST)
+	mutex_lock(&cs40l26->cl_dsp_lock);
+#endif
 	ret = cl_dsp_get_reg(cs40l26->dsp, "OWT_NUM_OF_WAVES_XM",
 			CL_DSP_XM_UNPACKED_TYPE, CS40L26_VIBEGEN_ALGO_ID, &reg);
+#if IS_ENABLED(CONFIG_GOOG_CUST)
+	mutex_unlock(&cs40l26->cl_dsp_lock);
+#endif
 	if (ret)
 		return ret;
 
@@ -2961,8 +3024,11 @@ out_free:
 	memset(&cs40l26->upload_effect, 0, sizeof(struct ff_effect));
 	kfree(cs40l26->raw_custom_data);
 	cs40l26->raw_custom_data = NULL;
+#if IS_ENABLED(CONFIG_GOOG_CUST)
+	if (ret < 0)
+		cs40l26_make_reset_decision(cs40l26, __func__);
 	ATRACE_END();
-
+#endif
 	return ret;
 }
 
@@ -3120,7 +3186,11 @@ static int cs40l26_erase_effect(struct input_dev *dev, int effect_id)
 	/* Wait for erase to finish */
 	flush_work(&cs40l26->erase_work);
 
+#if IS_ENABLED(CONFIG_GOOG_CUST)
+	if (cs40l26->erase_ret < 0)
+		cs40l26_make_reset_decision(cs40l26, __func__);
 	ATRACE_END();
+#endif
 	return cs40l26->erase_ret;
 }
 
@@ -4352,10 +4422,16 @@ static int cs40l26_cl_dsp_reinit(struct cs40l26_private *cs40l26)
 {
 	int ret;
 
+#if IS_ENABLED(CONFIG_GOOG_CUST)
+	mutex_lock(&cs40l26->cl_dsp_lock);
+#endif
 	if (cs40l26->dsp) {
 		ret = cl_dsp_destroy(cs40l26->dsp);
 		if (ret) {
 			dev_err(cs40l26->dev, "Failed to destroy DSP struct\n");
+#if IS_ENABLED(CONFIG_GOOG_CUST)
+			mutex_unlock(&cs40l26->cl_dsp_lock);
+#endif
 			return ret;
 		}
 
@@ -4363,6 +4439,9 @@ static int cs40l26_cl_dsp_reinit(struct cs40l26_private *cs40l26)
 	}
 
 	cs40l26->dsp = cl_dsp_create(cs40l26->dev, cs40l26->regmap);
+#if IS_ENABLED(CONFIG_GOOG_CUST)
+	mutex_unlock(&cs40l26->cl_dsp_lock);
+#endif
 	if (IS_ERR(cs40l26->dsp))
 		return PTR_ERR(cs40l26->dsp);
 
@@ -4836,6 +4915,200 @@ static int cs40l26_handle_platform_data(struct cs40l26_private *cs40l26)
 	return cs40l26_no_wait_ram_indices_get(cs40l26, np);
 }
 
+#if IS_ENABLED(CONFIG_GOOG_CUST)
+static void cs40l26_reset_worker(struct work_struct *work)
+{
+	struct cs40l26_private *cs40l26 = container_of(work,
+			struct cs40l26_private, reset_work);
+	struct device *dev = cs40l26->dev;
+	int error;
+	u32 id;
+
+	if (IS_ERR_OR_NULL(cs40l26->reset_gpio)) {
+		dev_dbg(dev, "Invalid reset GPIO\n");
+		return;
+	}
+
+	dev_dbg(dev, "Reset start: Event: %d; Count: %d.",
+		 cs40l26->reset_event, cs40l26->reset_count);
+
+	/* cs40l26_remove(cs40l26) */
+	if (cs40l26->fw_loaded)
+		disable_irq(cs40l26->irq);
+
+	if (cs40l26->vibe_workqueue) {
+		cancel_work_sync(&cs40l26->vibe_start_work);
+		cancel_work_sync(&cs40l26->vibe_stop_work);
+		cancel_work_sync(&cs40l26->set_gain_work);
+		cancel_work_sync(&cs40l26->upload_work);
+		cancel_work_sync(&cs40l26->erase_work);
+	}
+
+	/* Skip power off since REFCLK is shared and cannot be disabled. */
+
+	gpiod_set_value_cansleep(cs40l26->reset_gpio, 0);
+
+	/* cs40l26_probe(cs40l26, pdata) */
+	if (cs40l26->dev->of_node) {
+		error = cs40l26_handle_platform_data(cs40l26);
+		if (error)
+			goto err;
+	} else
+		dev_err(dev, "No DTSI to reset platform data\n");
+
+	/* Skip power on since REFCLK is shared and cannot be disabled. */
+
+	usleep_range(CS40L26_MIN_RESET_PULSE_WIDTH,
+			CS40L26_MIN_RESET_PULSE_WIDTH + 100);
+
+	gpiod_set_value_cansleep(cs40l26->reset_gpio, 1);
+
+	usleep_range(CS40L26_CONTROL_PORT_READY_DELAY,
+			CS40L26_CONTROL_PORT_READY_DELAY + 100);
+
+	/*
+	 * The DSP may lock up if a haptic effect is triggered via
+	 * GPI event or control port and the PLL is set to closed-loop.
+	 *
+	 * Set PLL to open-loop and remove any default GPI mappings
+	 * to prevent this while the driver is loading and configuring RAM
+	 * firmware.
+	 */
+
+	error = cs40l26_set_pll_loop(cs40l26, CS40L26_PLL_REFCLK_SET_OPEN_LOOP);
+	if (error)
+		goto err;
+
+	error = cs40l26_erase_gpi_mapping(cs40l26, CS40L26_GPIO_MAP_A_PRESS);
+	if (error)
+		goto err;
+
+	error = cs40l26_erase_gpi_mapping(cs40l26, CS40L26_GPIO_MAP_A_RELEASE);
+	if (error)
+		goto err;
+
+	error = cs40l26_part_num_resolve(cs40l26);
+	if (error)
+		goto err;
+
+	/* Set LRA to high-z to avoid fault conditions */
+	error = regmap_update_bits(cs40l26->regmap, CS40L26_TST_DAC_MSM_CONFIG,
+			CS40L26_SPK_DEFAULT_HIZ_MASK, 1 <<
+			CS40L26_SPK_DEFAULT_HIZ_SHIFT);
+	if (error) {
+		dev_err(dev, "Failed to set LRA to HI-Z\n");
+		goto err;
+	}
+
+	/* Load firmware at cs40l26_fw_swap() */
+	cs40l26->fw_defer = false;
+	if (cs40l26->calib_fw)
+		id = CS40L26_FW_CALIB_ID;
+	else
+		id = CS40L26_FW_ID;
+
+	if (cs40l26->fw_loaded)
+		enable_irq(cs40l26->irq);
+
+	error = cs40l26_fw_swap(cs40l26, id);
+	if (error)
+		goto err;
+
+	/* Reset vibe_state and counter/flag */
+	cs40l26->effects_in_flight = 0;
+	cs40l26->asp_enable = false;
+	cs40l26->vibe_state = CS40L26_VIBE_STATE_STOPPED;
+	sysfs_notify(&cs40l26->dev->kobj, "default", "vibe_state");
+
+	cs40l26->reset_event = CS40L26_RESET_EVENT_NONEED;
+	cs40l26->reset_count++;
+
+	dev_info(dev, "Reset end: Event: %d; Count: %d.",
+		 cs40l26->reset_event, cs40l26->reset_count);
+	return;
+
+err:
+	cs40l26->reset_event = CS40L26_RESET_EVENT_FAILED;
+	cs40l26->reset_time_s = ktime_get_real_seconds();
+	dev_err(dev, "Reset end: Fatal error at count: %d.", cs40l26->reset_count);
+}
+
+static bool cs40l26_handle_reset_boundary_condition(struct cs40l26_private *cs40l26)
+{
+	time64_t delta_sec = 0;
+
+	cs40l26->reset_time_e = ktime_get_real_seconds();
+	delta_sec = cs40l26->reset_time_e - cs40l26->reset_time_s;
+
+	if (delta_sec > CS40L26_RESET_COOLDOWN_TIMEOUT_SEC || delta_sec < 0 ||
+	    cs40l26->reset_count == 0) {
+		dev_info(cs40l26->dev, "Reset event: %d. Back to default.", cs40l26->reset_event);
+		cs40l26->reset_event = CS40L26_RESET_EVENT_ONGOING;
+		cs40l26->reset_time_s = cs40l26->reset_time_e;
+		cs40l26->reset_count = 0;
+		return true;
+	}
+
+	return false;
+}
+
+void cs40l26_make_reset_decision(struct cs40l26_private *cs40l26, const char *func)
+{
+	struct device *dev = cs40l26->dev;
+	bool trigger = false;
+
+	switch (cs40l26->reset_event) {
+	case CS40L26_RESET_EVENT_NONEED:
+		if (cs40l26_handle_reset_boundary_condition(cs40l26)) {
+			trigger = true;
+			break;
+		}
+
+		/*
+		 * Implies the following conditions are true:
+		 * 0 < cs40l26->reset_count && elapsed time <= CS40L26_RESET_COOLDOWN_TIMEOUT_SEC
+		 */
+		if (cs40l26->reset_count < CS40L26_RESET_MAX_COUNT) {
+			cs40l26->reset_event = CS40L26_RESET_EVENT_ONGOING;
+			trigger = true;
+		} else {
+			/* Enters the cooldown mode if reset too many times in a period. */
+			cs40l26->reset_event = CS40L26_RESET_EVENT_COOLDOWN;
+			cs40l26->reset_time_s = cs40l26->reset_time_e;
+		}
+		break;
+	case CS40L26_RESET_EVENT_TRIGGER:
+		cs40l26->reset_count = 0;
+		cs40l26_handle_reset_boundary_condition(cs40l26);
+		trigger = true;
+		break;
+	case CS40L26_RESET_EVENT_ONGOING:
+		break;
+	case CS40L26_RESET_EVENT_FAILED:
+		fallthrough;
+	case CS40L26_RESET_EVENT_COOLDOWN:
+		if (cs40l26_handle_reset_boundary_condition(cs40l26))
+			trigger = true;
+
+		break;
+	default:
+		dev_err(dev, "Invalid reset event!");
+	}
+
+	if (trigger) {
+		dev_info(dev, "Queue reset work after %s", func);
+
+		/*
+		 * Should not call flush_work() since it will cause deadlock if called by a
+		 * worker thread.
+		 */
+		queue_work(cs40l26->vibe_workqueue, &cs40l26->reset_work);
+	} else
+		dev_info(dev, "Reset event: %d. Skip this trigger from %s.", cs40l26->reset_event,
+			 func);
+}
+#endif
+
 int cs40l26_probe(struct cs40l26_private *cs40l26,
 		struct cs40l26_platform_data *pdata)
 {
@@ -4843,6 +5116,9 @@ int cs40l26_probe(struct cs40l26_private *cs40l26,
 	int ret;
 
 	mutex_init(&cs40l26->lock);
+#if IS_ENABLED(CONFIG_GOOG_CUST)
+	mutex_init(&cs40l26->cl_dsp_lock);
+#endif
 
 	cs40l26->vibe_workqueue = alloc_ordered_workqueue("vibe_workqueue",
 			WQ_HIGHPRI);
@@ -4856,6 +5132,12 @@ int cs40l26_probe(struct cs40l26_private *cs40l26,
 	INIT_WORK(&cs40l26->set_gain_work, cs40l26_set_gain_worker);
 	INIT_WORK(&cs40l26->upload_work, cs40l26_upload_worker);
 	INIT_WORK(&cs40l26->erase_work, cs40l26_erase_worker);
+#if IS_ENABLED(CONFIG_GOOG_CUST)
+	INIT_WORK(&cs40l26->reset_work, cs40l26_reset_worker);
+	cs40l26->reset_event = CS40L26_RESET_EVENT_NONEED;
+	cs40l26->reset_time_e = ktime_get_real_seconds();
+	cs40l26->reset_time_s = cs40l26->reset_time_e;
+#endif
 
 	ret = devm_regulator_bulk_get(dev, CS40L26_NUM_SUPPLIES,
 			cs40l26_supplies);
@@ -4986,7 +5268,9 @@ int cs40l26_remove(struct cs40l26_private *cs40l26)
 
 	disable_irq(cs40l26->irq);
 	mutex_destroy(&cs40l26->lock);
-
+#if IS_ENABLED(CONFIG_GOOG_CUST)
+	mutex_destroy(&cs40l26->cl_dsp_lock);
+#endif
 
 	if (cs40l26->pm_ready)
 		cs40l26_pm_runtime_teardown(cs40l26);
@@ -5108,6 +5392,9 @@ EXPORT_SYMBOL(cs40l26_resume_error_handle);
 int cs40l26_resume(struct device *dev)
 {
 	struct cs40l26_private *cs40l26 = dev_get_drvdata(dev);
+#if IS_ENABLED(CONFIG_GOOG_CUST)
+	int error;
+#endif
 
 	if (!cs40l26->pm_ready) {
 		dev_dbg(dev, "Resume call ignored\n");
@@ -5116,8 +5403,17 @@ int cs40l26_resume(struct device *dev)
 
 	dev_dbg(cs40l26->dev, "%s: Disabling hibernation\n", __func__);
 
+#if IS_ENABLED(CONFIG_GOOG_CUST)
+	error = cs40l26_pm_state_transition(cs40l26,
+			CS40L26_PM_STATE_PREVENT_HIBERNATE);
+	if (error < 0 || cs40l26->reset_event == CS40L26_RESET_EVENT_TRIGGER)
+		cs40l26_make_reset_decision(cs40l26, __func__);
+
+	return error;
+#else
 	return cs40l26_pm_state_transition(cs40l26,
 			CS40L26_PM_STATE_PREVENT_HIBERNATE);
+#endif
 }
 EXPORT_SYMBOL(cs40l26_resume);
 

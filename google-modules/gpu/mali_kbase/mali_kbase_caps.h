@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 /*
  *
- * (C) COPYRIGHT 2020-2022 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2020-2023 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -33,15 +33,22 @@
  *
  * @MALI_KBASE_CAP_SYSTEM_MONITOR: System Monitor
  * @MALI_KBASE_CAP_JIT_PRESSURE_LIMIT: JIT Pressure limit
+ * @MALI_KBASE_CAP_MEM_DONT_NEED: Not needed physical memory
  * @MALI_KBASE_CAP_MEM_GROW_ON_GPF: Memory grow on page fault
  * @MALI_KBASE_CAP_MEM_PROTECTED: Protected memory
+ * @MALI_KBASE_CAP_MEM_IMPORT_SYNC_ON_MAP_UNMAP: CPU cache maintenance required when
+ *                                               imported GPU memory is mapped/unmapped
+ * @MALI_KBASE_CAP_MEM_KERNEL_SYNC: Kernel side cache sync ops required
  * @MALI_KBASE_NUM_CAPS: Delimiter
  */
 enum mali_kbase_cap {
 	MALI_KBASE_CAP_SYSTEM_MONITOR = 0,
 	MALI_KBASE_CAP_JIT_PRESSURE_LIMIT,
+	MALI_KBASE_CAP_MEM_DONT_NEED,
 	MALI_KBASE_CAP_MEM_GROW_ON_GPF,
 	MALI_KBASE_CAP_MEM_PROTECTED,
+	MALI_KBASE_CAP_MEM_IMPORT_SYNC_ON_MAP_UNMAP,
+	MALI_KBASE_CAP_MEM_KERNEL_SYNC,
 	MALI_KBASE_NUM_CAPS
 };
 
@@ -57,6 +64,11 @@ static inline bool mali_kbase_supports_jit_pressure_limit(unsigned long api_vers
 	return mali_kbase_supports_cap(api_version, MALI_KBASE_CAP_JIT_PRESSURE_LIMIT);
 }
 
+static inline bool mali_kbase_supports_mem_dont_need(unsigned long api_version)
+{
+	return mali_kbase_supports_cap(api_version, MALI_KBASE_CAP_MEM_DONT_NEED);
+}
+
 static inline bool mali_kbase_supports_mem_grow_on_gpf(unsigned long api_version)
 {
 	return mali_kbase_supports_cap(api_version, MALI_KBASE_CAP_MEM_GROW_ON_GPF);
@@ -67,4 +79,14 @@ static inline bool mali_kbase_supports_mem_protected(unsigned long api_version)
 	return mali_kbase_supports_cap(api_version, MALI_KBASE_CAP_MEM_PROTECTED);
 }
 
-#endif	/* __KBASE_CAPS_H_ */
+static inline bool mali_kbase_supports_mem_import_sync_on_map_unmap(unsigned long api_version)
+{
+	return mali_kbase_supports_cap(api_version, MALI_KBASE_CAP_MEM_IMPORT_SYNC_ON_MAP_UNMAP);
+}
+
+static inline bool mali_kbase_supports_mem_kernel_sync(unsigned long api_version)
+{
+	return mali_kbase_supports_cap(api_version, MALI_KBASE_CAP_MEM_KERNEL_SYNC);
+}
+
+#endif /* __KBASE_CAPS_H_ */

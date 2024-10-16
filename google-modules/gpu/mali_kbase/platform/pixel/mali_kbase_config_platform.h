@@ -81,6 +81,12 @@ extern struct protected_mode_ops pixel_protected_ops;
 #include <linux/workqueue.h>
 #endif /* CONFIG_MALI_MIDGARD_DVFS */
 
+#if IS_ENABLED(CONFIG_EXYNOS_ITMON)
+#include <linux/atomic.h>
+#include <linux/notifier.h>
+#include <linux/workqueue.h>
+#endif /* IS_ENABLED(CONFIG_EXYNOS_ITMON) */
+
 /* SOC level includes */
 #if IS_ENABLED(CONFIG_GOOGLE_BCL)
 #include <soc/google/bcl.h>
@@ -296,9 +302,12 @@ struct gpu_dvfs_metrics_uid_stats;
  * @dvfs.qos.bts.threshold: The G3D shader stack clock at which BTS will be enabled. Set via DT.
  * @dvfs.qos.bts.scenario:  The index of the BTS scenario to be used. Set via DT.
  *
- * @slc.lock:           Synchronize updates to the SLC partition accounting variables.
- * @slc.demand:         The total demand for SLC space, an aggregation of each kctx's demand.
- * @slc.usage:          The total amount of SLC space used, an aggregation of each kctx's usage.
+ * @itmon.wq:     A workqueue for ITMON page table search.
+ * @itmon.work:   The work item for the above.
+ * @itmon.nb:     The ITMON notifier block.
+ * @itmon.pa:     The faulting physical address.
+ * @itmon.active: Active count, non-zero while a search is active.
+ * @slc_demand:   Tracks demand for SLC space
  */
 struct pixel_context {
 	struct kbase_device *kbdev;
@@ -322,9 +331,6 @@ struct pixel_context {
 		struct bcl_device *bcl_dev;
 #endif
 		struct pixel_rail_state_log *rail_state_log;
-#ifdef CONFIG_MALI_HOST_CONTROLS_SC_RAILS
-		bool ifpo_enabled;
-#endif
 	} pm;
 
 #ifdef CONFIG_MALI_PIXEL_GPU_SECURE_RENDERING
@@ -409,27 +415,35 @@ struct pixel_context {
 	} dvfs;
 #endif /* CONFIG_MALI_MIDGARD_DVFS */
 
+#if IS_ENABLED(CONFIG_EXYNOS_ITMON)
 	struct {
-		struct mutex lock;
-		u64 demand;
-		u64 usage;
-	} slc;
+		struct workqueue_struct *wq;
+		struct work_struct work;
+		struct notifier_block nb;
+		phys_addr_t pa;
+		atomic_t active;
+	} itmon;
+#endif
+#ifndef PIXEL_GPU_SLC_ACPM_SIGNAL
+	atomic_t slc_demand;
+#endif /* PIXEL_GPU_SLC_ACPM_SIGNAL */
 };
 
 /**
  * struct pixel_platform_data - Per kbase_context Pixel specific platform data
  *
+ * @kctx:       Handle to the parent kctx
  * @stats:      Tracks the dvfs metrics for the UID associated with this context
- *
- * @slc.peak_demand: The parent context's maximum demand for SLC space
- * @slc.peak_usage:  The parent context's maximum use of SLC space
+ * @slc_vote:   Tracks whether this context is voting for slc
+ * @slc_demand: Tracks demand for SLC space
  */
 struct pixel_platform_data {
+	struct kbase_context *kctx;
 	struct gpu_dvfs_metrics_uid_stats* stats;
-	struct {
-		u64 peak_demand;
-		u64 peak_usage;
-	} slc;
+	int slc_vote;
+#ifndef PIXEL_GPU_SLC_ACPM_SIGNAL
+	atomic_t slc_demand;
+#endif /* PIXEL_GPU_SLC_ACPM_SIGNAL */
 };
 
 #endif /* _KBASE_CONFIG_PLATFORM_H_ */

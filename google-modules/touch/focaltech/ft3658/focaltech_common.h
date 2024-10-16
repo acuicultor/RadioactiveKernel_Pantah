@@ -265,33 +265,20 @@ enum TBN_OWRER {
 /*****************************************************************************
 * DEBUG function define here
 *****************************************************************************/
+#undef pr_fmt
+#define pr_fmt(fmt) "gtd: FTS_TS: " fmt
 #if FTS_DEBUG_EN
-#define FTS_DEBUG(fmt, args...) do { \
-    printk("[FTS_TS/D]%s:"fmt"\n", __func__, ##args); \
-} while (0)
-
-#define FTS_FUNC_ENTER() do { \
-    printk("[FTS_TS/D]%s: Enter\n", __func__); \
-} while (0)
-
-#define FTS_FUNC_EXIT() do { \
-    printk("[FTS_TS/D]%s: Exit(%d)\n", __func__, __LINE__); \
-} while (0)
+#define FTS_DEBUG(fmt, ...) pr_info(fmt, ##__VA_ARGS__)
+#define FTS_FUNC_ENTER() pr_debug("%s: Enter\n", __func__)
+#define FTS_FUNC_EXIT() pr_debug("%s: Exit(%d)\n", __func__, __LINE__)
 #else /* #if FTS_DEBUG_EN*/
-#define FTS_DEBUG(fmt, args...)
+#define FTS_DEBUG(fmt, ...)
 #define FTS_FUNC_ENTER()
 #define FTS_FUNC_EXIT()
 #endif
 
-#define FTS_INFO(fmt, args...) do { \
-    printk(KERN_INFO "[FTS_TS/I]%s:"fmt"\n", __func__, ##args); \
-} while (0)
-
-#define FTS_ERROR(fmt, args...) do { \
-    printk(KERN_ERR "[FTS_TS/E]%s:"fmt"\n", __func__, ##args); \
-} while (0)
-
-#define PR_LOGD(log, ...) \
-    pr_debug("[FTS_TS/D] %s: " log, __func__, ##__VA_ARGS__)
+#define FTS_INFO(fmt, ...) pr_info(fmt, ##__VA_ARGS__)
+#define FTS_ERROR(fmt, ...) pr_err(fmt, ##__VA_ARGS__)
+#define PR_LOGD(fmt, ...) pr_debug(fmt, ##__VA_ARGS__)
 
 #endif /* __LINUX_FOCALTECH_COMMON_H__ */

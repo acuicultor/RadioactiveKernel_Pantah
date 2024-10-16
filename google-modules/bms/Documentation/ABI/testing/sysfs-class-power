@@ -1,0 +1,19 @@
+What:		/sys/class/power_supply/maxfg/fg_learning_events
+Date:		Feb 2024
+Contact:	apelosi@google.com
+Description:
+		Report a snapshot of fuel gauge registers captured during
+                each learning event. Write 0 to clear the events.
+
+		Access: Read/Write
+		Valid values: Represented as string
+
+What:		/sys/class/power_supply/battery/charge_to_limit
+Date:		Mar 2024
+Contact:	hsiufangho@google.com
+Description:
+		Read/Write charge to limit SOC(state of charge)
+                Write 0 to disable this feature.
+
+		Access: Read/Write
+		Valid values: Represented as int

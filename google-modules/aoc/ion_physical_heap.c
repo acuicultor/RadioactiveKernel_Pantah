@@ -19,18 +19,6 @@
 
 #define ION_PHYSICAL_ALLOCATE_FAIL -1
 
-struct ion_physical_heap {
-	struct gen_pool *pool;
-	phys_addr_t base;
-	size_t size;
-
-	ion_physical_heap_allocate_callback *allocate_cb;
-	void *allocate_ctx;
-
-	ion_physical_heap_free_callback *free_cb;
-	void *free_ctx;
-};
-
 static int _clear_pages(struct page **pages, int num, pgprot_t pgprot)
 {
 	void *addr = vmap(pages, num, VM_MAP, pgprot);

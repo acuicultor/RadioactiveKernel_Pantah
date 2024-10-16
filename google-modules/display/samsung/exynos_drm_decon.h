@@ -362,7 +362,8 @@ struct dpu_log_bts_cal {
 	u32 rt_avg_bw;
 	u32 read_bw;
 	u32 write_bw;
-	u32 fps;
+	u32 fps; /* bts fps */
+	u32 crtc_fps; /* crtc fps */
 };
 
 struct dpu_log_bts_event {
@@ -454,6 +455,7 @@ struct decon_device {
 	struct device			*dev;
 	struct drm_device		*drm_dev;
 	struct exynos_drm_crtc		*crtc;
+	struct drm_atomic_state		*suspend_state;
 	/* dpp information saved in dpp channel number order */
 	struct dpp_device		*dpp[MAX_WIN_PER_DECON];
 	struct dpp_device		*rcd;

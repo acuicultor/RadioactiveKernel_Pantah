@@ -19,16 +19,15 @@
 #include "uapi/input/touch_offload.h"
 
 #define GTI_NAME "goog_touch_interface"
-#define GOOG_LOG_NAME(gti) ((gti && gti->dev) ? dev_name(gti->dev) : "GTI")
-#define GOOG_DBG(gti, fmt, args...)    pr_debug("[%s] %s: " fmt, GOOG_LOG_NAME(gti),\
-					__func__, ##args)
-#define GOOG_LOG(gti, fmt, args...)    pr_info("[%s] " fmt, GOOG_LOG_NAME(gti), ##args)
-#define GOOG_INFO(gti, fmt, args...)	pr_info("[%s] %s: " fmt, GOOG_LOG_NAME(gti),\
-					__func__, ##args)
-#define GOOG_WARN(gti, fmt, args...)    pr_warn("[%s] %s: " fmt, GOOG_LOG_NAME(gti),\
-					__func__, ##args)
-#define GOOG_ERR(gti, fmt, args...)    pr_err("[%s] %s: " fmt, GOOG_LOG_NAME(gti),\
-					__func__, ##args)
+#define GOOG_LOG_NAME(gti) ((gti && gti->dev) ? dev_name(gti->dev) : "gti")
+#define GOOG_DBG(gti, fmt, args...)  pr_debug("%s: " fmt, GOOG_LOG_NAME(gti), ##args)
+#define GOOG_INFO(gti, fmt, args...) pr_info("%s: " fmt, GOOG_LOG_NAME(gti), ##args)
+#define GOOG_WARN(gti, fmt, args...) pr_warn("%s: " fmt, GOOG_LOG_NAME(gti), ##args)
+#define GOOG_ERR(gti, fmt, args...)  pr_err("%s: " fmt, GOOG_LOG_NAME(gti), ##args)
+#define GOOG_LOGD(gti, fmt, args...) GOOG_DBG(gti, "%s: "fmt, __func__, ##args)
+#define GOOG_LOGI(gti, fmt, args...) GOOG_INFO(gti, "%s: "fmt, __func__, ##args)
+#define GOOG_LOGW(gti, fmt, args...) GOOG_WARN(gti, "%s: "fmt, __func__, ##args)
+#define GOOG_LOGE(gti, fmt, args...) GOOG_ERR(gti, "%s: "fmt, __func__, ##args)
 #define MAX_SLOTS 10
 
 #define GTI_DEBUG_KFIFO_LEN 4 /* must be power of 2. */
@@ -549,7 +548,8 @@ struct gti_pm {
  * @dev: pointer to struct device that used by google touch interface driver.
  * @options: optional configuration that could apply by vendor driver.
  * @input_lock: protect the input report between non-offload and offload.
- * @input_process_lock: protect heatmap reading and frame reserving.
+ * @input_process_lock: mutex for goog_input_process() function.
+ * @input_heatmap_lock: mutex for heatmap reading between vendor driver, GTI or sysfs/procfs.
  * @offload: struct that used by touch offload.
  * @offload_frame: reserved frame that used by touch offload.
  * @v4l2: struct that used by v4l2.
@@ -624,6 +624,7 @@ struct goog_touch_interface {
 	struct gti_optional_configuration options;
 	struct mutex input_lock;
 	struct mutex input_process_lock;
+	struct mutex input_heatmap_lock;
 	struct touch_offload_context offload;
 	struct touch_offload_frame *offload_frame;
 	struct v4l2_heatmap v4l2;

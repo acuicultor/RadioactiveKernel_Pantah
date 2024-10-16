@@ -47,6 +47,7 @@ static int debug_printk_prlog = LOGLEVEL_INFO;
 struct dual_fg_drv {
 	struct device *device;
 	struct power_supply *psy;
+	struct power_supply *batt_psy;
 
 	const char *first_fg_psy_name;
 	const char *second_fg_psy_name;
@@ -55,6 +56,7 @@ struct dual_fg_drv {
 	struct power_supply *second_fg_psy;
 
 	struct mutex fg_lock;
+	struct mutex stats_lock;
 
 	struct delayed_work init_work;
 	struct delayed_work gdbatt_work;
@@ -89,6 +91,11 @@ struct dual_fg_drv {
 
 	int base_soc;
 	int sec_soc;
+
+	struct gbms_ce_tier_stats base_batt_stats;
+	struct gbms_ce_tier_stats sec_batt_stats;
+	union gbms_charger_state chg_state;
+	ktime_t last_update;
 };
 
 static int gdbatt_resume_check(struct dual_fg_drv *dual_fg_drv) {
@@ -421,6 +428,109 @@ static void gdbatt_fg_logging(struct dual_fg_drv *dual_fg_drv, int base_soc_raw,
 	dual_fg_drv->sec_soc = sec_soc;
 }
 
+static void gdbatt_stats_init(struct dual_fg_drv *dual_fg_drv)
+{
+	const ktime_t now = get_boot_sec();
+
+	mutex_lock(&dual_fg_drv->stats_lock);
+
+	memset(&dual_fg_drv->base_batt_stats, 0, sizeof(dual_fg_drv->base_batt_stats));
+	memset(&dual_fg_drv->sec_batt_stats, 0, sizeof(dual_fg_drv->sec_batt_stats));
+
+	gbms_tier_stats_init(&dual_fg_drv->base_batt_stats, GBMS_STATS_BASE_BATT);
+	gbms_tier_stats_init(&dual_fg_drv->sec_batt_stats, GBMS_STATS_SEC_BATT);
+
+	dual_fg_drv->last_update = now;
+
+	mutex_unlock(&dual_fg_drv->stats_lock);
+}
+
+static int gbatt_update_batt_stats(struct power_supply *psy, ktime_t elap,
+				   struct gbms_ce_tier_stats *tier,
+				   struct gbms_chg_profile *profile,
+				   union gbms_charger_state *chg_state)
+{
+	int ret, temp, temp_idx, ibatt_ma, cc, soc_in;
+
+	ret = gdbatt_get_temp(psy, &temp);
+	if (ret < 0)
+		return ret;
+
+	temp_idx = gbms_msc_temp_idx(profile, temp);
+
+	ibatt_ma = GPSY_GET_INT_PROP(psy, POWER_SUPPLY_PROP_CURRENT_NOW, &ret);
+	if (ret < 0)
+		return ret;
+
+	ibatt_ma /= 1000;
+
+	cc = GPSY_GET_INT_PROP(psy, POWER_SUPPLY_PROP_CHARGE_COUNTER, &ret);
+	if (ret < 0)
+		return ret;
+
+	soc_in = GPSY_GET_PROP(psy, GBMS_PROP_CAPACITY_RAW);
+	if (soc_in < 0) {
+		pr_info("MSC_STAT dual cannot read soc_in=%d\n", soc_in);
+		/* We still want to update initialized tiers. */
+		soc_in = -1;
+	}
+
+	gbms_stats_update_tier(temp_idx, ibatt_ma, temp, elap, cc, chg_state, -1, soc_in, tier);
+
+	return 0;
+}
+
+static void gbatt_update_stats(struct dual_fg_drv *dual_fg_drv)
+{
+	const ktime_t now = get_boot_sec();
+	ktime_t elap;
+	int ret = 0;
+
+	ret = gdbatt_resume_check(dual_fg_drv);
+	if (ret < 0)
+		goto done;
+
+	mutex_lock(&dual_fg_drv->stats_lock);
+
+	if (!dual_fg_drv->cable_in)
+		goto done;
+
+	if (!dual_fg_drv->first_fg_psy && !dual_fg_drv->second_fg_psy)
+		goto done;
+
+	if (!dual_fg_drv->batt_psy)
+		dual_fg_drv->batt_psy = power_supply_get_by_name("battery");
+
+	if (dual_fg_drv->batt_psy)
+		dual_fg_drv->chg_state.v = GPSY_GET_INT64_PROP(dual_fg_drv->batt_psy,
+							       GBMS_PROP_CHARGE_CHARGER_STATE,
+							       &ret);
+	if (ret < 0)
+		goto done;
+
+	elap = now - dual_fg_drv->last_update;
+	dual_fg_drv->last_update = now;
+
+	if (dual_fg_drv->first_fg_psy)
+		ret = gbatt_update_batt_stats(dual_fg_drv->first_fg_psy, elap,
+					      &dual_fg_drv->base_batt_stats,
+					      &dual_fg_drv->base_profile,
+					      &dual_fg_drv->chg_state);
+	if (ret < 0)
+		goto done;
+
+	if (dual_fg_drv->second_fg_psy)
+		ret = gbatt_update_batt_stats(dual_fg_drv->second_fg_psy, elap,
+					      &dual_fg_drv->sec_batt_stats,
+					      &dual_fg_drv->sec_profile,
+					      &dual_fg_drv->chg_state);
+	if (ret < 0)
+		goto done;
+
+done:
+	mutex_unlock(&dual_fg_drv->stats_lock);
+}
+
 static void google_dual_batt_work(struct work_struct *work)
 {
 	struct dual_fg_drv *dual_fg_drv = container_of(work, struct dual_fg_drv,
@@ -433,6 +543,8 @@ static void google_dual_batt_work(struct work_struct *work)
 
 	if (!dual_fg_drv->init_complete)
 		goto done;
+
+	gbatt_update_stats(dual_fg_drv);
 
 	if (!base_psy || !sec_psy)
 		goto done;
@@ -609,6 +721,8 @@ static int gdbatt_set_property(struct power_supply *psy,
 				pr_err("Cannot set the second BATT_CE_CTRL, ret=%d\n", ret);
 		}
 		dual_fg_drv->cable_in = !!val->intval;
+		if (dual_fg_drv->cable_in)
+			dual_fg_drv->last_update = get_boot_sec();
 		mod_delayed_work(system_wq, &dual_fg_drv->gdbatt_work, 0);
 		break;
 	case GBMS_PROP_HEALTH_ACT_IMPEDANCE:
@@ -828,6 +942,8 @@ static void google_dual_batt_gauge_init_work(struct work_struct *work)
 	if (err < 0)
 		pr_err("cannot register power supply notifer (%d)\n", err);
 
+	gdbatt_stats_init(dual_fg_drv);
+
 	dual_fg_drv->init_complete = true;
 	dual_fg_drv->resume_complete = true;
 	dual_fg_drv->base_charge_full = 0;
@@ -842,13 +958,72 @@ retry_init_work:
 			      msecs_to_jiffies(DUAL_FG_DELAY_INIT_MS));
 }
 
+static ssize_t dbatt_stats_store(struct device *dev, struct device_attribute *attr,
+				     const char *buf, size_t count) {
+	struct power_supply *psy = container_of(dev, struct power_supply, dev);
+	struct dual_fg_drv *dual_fg_drv = power_supply_get_drvdata(psy);
+
+	if (count < 1)
+		return -ENODATA;
+
+	if (buf[0] == '0')
+		gdbatt_stats_init(dual_fg_drv);
+
+	return count;
+}
+
+static ssize_t dbatt_stats_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct power_supply *psy = container_of(dev, struct power_supply, dev);
+	struct dual_fg_drv *dual_fg_drv = power_supply_get_drvdata(psy);
+	struct gbms_ce_tier_stats *b_stats = &dual_fg_drv->base_batt_stats;
+	struct gbms_ce_tier_stats *s_stats = &dual_fg_drv->sec_batt_stats;
+	uint32_t time_sum;
+	ssize_t len = 0;
+
+	mutex_lock(&dual_fg_drv->stats_lock);
+
+	time_sum = b_stats->time_fast + b_stats->time_other + b_stats->time_taper;
+	if (time_sum > 0)
+		len = gbms_tier_stats_cstr(&buf[len], PAGE_SIZE, b_stats, false);
+
+	time_sum = s_stats->time_fast + s_stats->time_other + s_stats->time_taper;
+	if (time_sum > 0)
+		len += gbms_tier_stats_cstr(&buf[len], PAGE_SIZE, s_stats, false);
+
+	mutex_unlock(&dual_fg_drv->stats_lock);
+
+	return len;
+}
+
+static const DEVICE_ATTR_RW(dbatt_stats);
+
+static int google_dual_batt_init_sysfs(struct dual_fg_drv *dual_fg_drv)
+{
+	struct dentry *de;
+	int ret;
+
+	/* stats */
+	ret = device_create_file(&dual_fg_drv->psy->dev, &dev_attr_dbatt_stats);
+	if (ret)
+		dev_err(&dual_fg_drv->psy->dev, "Failed to create dbatt_stats\n");
+
+	/* debugfs */
+	de = debugfs_create_dir("google_dual_batt", 0);
+	if (IS_ERR_OR_NULL(de))
+		dev_err(dual_fg_drv->device, "Couldn't create debugfs, (%ld)\n", PTR_ERR(de));
+	else
+		debugfs_create_u32("debug_level", 0644, de, &debug_printk_prlog);
+
+	return 0;
+}
+
 static int google_dual_batt_gauge_probe(struct platform_device *pdev)
 {
 	const char *first_fg_psy_name;
 	const char *second_fg_psy_name;
 	struct dual_fg_drv *dual_fg_drv;
 	struct power_supply_config psy_cfg = {};
-	struct dentry *de;
 	int ret;
 
 	dual_fg_drv = devm_kzalloc(&pdev->dev, sizeof(*dual_fg_drv), GFP_KERNEL);
@@ -892,6 +1067,7 @@ static int google_dual_batt_gauge_probe(struct platform_device *pdev)
 	INIT_DELAYED_WORK(&dual_fg_drv->init_work, google_dual_batt_gauge_init_work);
 	INIT_DELAYED_WORK(&dual_fg_drv->gdbatt_work, google_dual_batt_work);
 	mutex_init(&dual_fg_drv->fg_lock);
+	mutex_init(&dual_fg_drv->stats_lock);
 	platform_set_drvdata(pdev, dual_fg_drv);
 
 	psy_cfg.drv_data = dual_fg_drv;
@@ -929,12 +1105,7 @@ static int google_dual_batt_gauge_probe(struct platform_device *pdev)
 		dual_fg_drv->log = NULL;
 	}
 
-	/* debugfs */
-	de = debugfs_create_dir("google_dual_batt", 0);
-	if (IS_ERR_OR_NULL(de))
-		dev_err(dual_fg_drv->device, "Couldn't create debugfs, (%ld)\n", PTR_ERR(de));
-	else
-		debugfs_create_u32("debug_level", 0644, de, &debug_printk_prlog);
+	google_dual_batt_init_sysfs(dual_fg_drv);
 
 	schedule_delayed_work(&dual_fg_drv->init_work,
 					msecs_to_jiffies(DUAL_FG_DELAY_INIT_MS));

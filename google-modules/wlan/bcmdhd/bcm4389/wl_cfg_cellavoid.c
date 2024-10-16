@@ -65,7 +65,9 @@
 
 #define INVALID_CHSPEC_BW	(0xFFFF)
 
-#define CELLAVOID_DEFAULT_TXCAP	127u
+#define CELLAVOID_NO_POWER_CAP (0x7FFFFFFF)
+#define CELLAVOID_TXCAP_MIN_VAL -32	/* dBm */
+#define CELLAVOID_TXCAP_MAX_VAL 31	/* dBm */
 #define CELLAVOID_MAX_CH 128u
 #define WL_CELLAVOID_INFORM(args) WL_ERR(args)
 
@@ -478,7 +480,7 @@ wl_cellavoid_clear_cell_chan_list(wl_cellavoid_info_t *cellavoid_info)
 		GCC_DIAGNOSTIC_POP();
 		list_del(&chan_info->list);
 		/* Restore channel info to the value of safe channel */
-		chan_info->pwr_cap = CELLAVOID_DEFAULT_TXCAP;
+		chan_info->pwr_cap = CELLAVOID_TXCAP_MAX_VAL;
 		list_add(&chan_info->list, &cellavoid_info->avail_chan_info_list);
 	}
 	cellavoid_info->cell_chan_info_cnt = 0;
@@ -802,7 +804,7 @@ wl_cellavoid_alloc_chan_info(wl_cellavoid_info_t *cellavoid_info, chanspec_t cha
 	}
 
 	chan_info->chanspec = chanspec;
-	chan_info->pwr_cap = CELLAVOID_DEFAULT_TXCAP;
+	chan_info->pwr_cap = CELLAVOID_TXCAP_MAX_VAL;
 
 	return chan_info;
 }
@@ -880,6 +882,8 @@ free_list:
 	return BCME_NOMEM;
 }
 
+#define MAX_20MHZ_CHANNELS   16u
+
 /* This function is used verifying channel items
  * created by wl_cellavoid_alloc_avail_chan_list are valid
  * by comparing the channel item to chan_info_list from FW
@@ -895,10 +899,13 @@ wl_cellavoid_verify_avail_chan_list(struct bcm_cfg80211 *cfg, wl_cellavoid_info_
 	void *dngl_chan_list;
 	bool legacy_chan_info = FALSE;
 	bool found;
-	int i, err;
+	int i, j, k, err;
 	chanspec_t chanspec = 0;
 	char chanspec_str[CHANSPEC_STR_LEN];
 	uint32 restrict_chan, chaninfo;
+	u32 arr_idx = 0, band;
+	u8 chan_array[MAX_20MHZ_CHANNELS] = {0};
+	wl_chanspec_attr_v1_t overlap[MAX_20MHZ_CHANNELS];
 
 	/* Get chan_info_list or chanspec from FW */
 #define LOCAL_BUF_LEN 4096
@@ -937,6 +944,10 @@ wl_cellavoid_verify_avail_chan_list(struct bcm_cfg80211 *cfg, wl_cellavoid_info_
 	GCC_DIAGNOSTIC_PUSH_SUPPRESS_CAST();
 	list_for_each_entry_safe(chan_info, next, &cellavoid_info->avail_chan_info_list, list) {
 		GCC_DIAGNOSTIC_POP();
+		wf_get_all_ext(chan_info->chanspec, chan_array);
+		bzero(overlap, sizeof(overlap));
+		band = CHSPEC_BAND(chan_info->chanspec);
+		arr_idx = 0;
 		found = FALSE;
 		for (i = 0; i < dtoh32(list_count); i++) {
 			if (legacy_chan_info) {
@@ -949,9 +960,40 @@ wl_cellavoid_verify_avail_chan_list(struct bcm_cfg80211 *cfg, wl_cellavoid_info_
 
 				chaninfo = dtoh32
 				(((wl_chanspec_list_v1_t *)dngl_chan_list)->chspecs[i].chaninfo);
+
+				/* Store chanspec attribute of subbands channel. */
+				if ((CHSPEC_BAND(chanspec) == band) &&
+					(CHSPEC_BW(chanspec) == WL_CHANSPEC_BW_20)) {
+					for (j = 0; j < MAX_20MHZ_CHANNELS; j++) {
+						if (!chan_array[j]) {
+							/* if entry is empty, break */
+							break;
+						}
+						if (chan_array[j] == CHSPEC_CHANNEL(chanspec)) {
+							overlap[arr_idx].chanspec = chanspec;
+							overlap[arr_idx].chaninfo = chaninfo;
+							WL_DBG(("sel_chspec:%x overlap_chspec:%x\n",
+									chan_info->chanspec,
+									overlap[arr_idx].chanspec));
+							arr_idx++;
+							break;
+						}
+					}
+				}
+
 				restrict_chan = ((chaninfo & WL_CHAN_RADAR) ||
 					(chaninfo & WL_CHAN_PASSIVE) ||
 					(chaninfo & WL_CHAN_CLM_RESTRICTED));
+
+				if (chan_info->chanspec == chanspec) {
+					for (k = 0; k < arr_idx; k++) {
+						restrict_chan |=
+							((overlap[k].chaninfo & WL_CHAN_RADAR) ||
+							(overlap[k].chaninfo & WL_CHAN_PASSIVE) ||
+							(overlap[k].chaninfo &
+								WL_CHAN_CLM_RESTRICTED));
+					}
+				}
 			}
 
 			if ((!restrict_chan) && (chan_info->chanspec == chanspec)) {
@@ -1638,8 +1680,6 @@ wl_cellavoid_validate_param(struct bcm_cfg80211 *cfg, wl_cellavoid_param_t *para
 			WL_ERR(("Not supported band %d, channel %d, pwrcap %d\n",
 				param->chan_param[i].band, param->chan_param[i].center_channel,
 				param->chan_param[i].pwr_cap));
-			ret = -EINVAL;
-			goto exit;
 		}
 
 		param->chan_param[i].chspec_bw = bw;
@@ -1793,12 +1833,32 @@ wl_cellavoid_update_param(struct bcm_cfg80211 *cfg, wl_cellavoid_param_t *param)
 	return err;
 }
 
+static int
+wl_cellavoid_is_pwrcap_valid(struct bcm_cfg80211 *cfg,
+	int32 fwk_val, int8 *pwrcap)
+{
+	int ret = BCME_OK;
+	WL_DBG_MEM(("fwk_val:0x%x\n", fwk_val));
+	if (fwk_val == CELLAVOID_NO_POWER_CAP) {
+		*pwrcap = CELLAVOID_TXCAP_MAX_VAL;
+	} else if ((fwk_val < CELLAVOID_TXCAP_MAX_VAL) &&
+		(fwk_val >= CELLAVOID_TXCAP_MIN_VAL)) {
+		*pwrcap = fwk_val;
+	} else {
+		WL_ERR(("unsupported value for pwr_cap:0x%x\n",
+			fwk_val));
+		ret = BCME_BADARG;
+	}
+	return ret;
+}
+
 /* cfg vendor interface function */
 int
 wl_cfgvendor_cellavoid_set_cell_channels(struct wiphy *wiphy,
 		struct wireless_dev *wdev, const void  *data, int len)
 {
 	int err = BCME_OK, rem, rem1, rem2, type;
+	int8 pwrcap;
 	wl_cellavoid_param_t param;
 	wl_cellavoid_chan_param_t* cur_chan_param = NULL;
 	const struct nlattr *iter, *iter1, *iter2;
@@ -1860,11 +1920,20 @@ wl_cfgvendor_cellavoid_set_cell_channels(struct wiphy *wiphy,
 								nla_get_u32(iter2);
 							break;
 						case CELLAVOID_ATTRIBUTE_PWRCAP:
-							cur_chan_param->pwr_cap =
-								nla_get_u32(iter2);
+							err = wl_cellavoid_is_pwrcap_valid(cfg,
+								nla_get_u32(iter2), &pwrcap);
+							if (err == BCME_OK) {
+								cur_chan_param->pwr_cap = pwrcap;
+							} else {
+								WL_ERR(("pwr_cap is not valid\n"));
+								goto exit;
+							}
 							break;
 					}
 				}
+				WL_DBG_MEM(("CELLAVOID PARAM - BAND:%d CHAN:%d PWR_CAP:%d\n",
+					cur_chan_param->band, cur_chan_param->center_channel,
+					cur_chan_param->pwr_cap));
 				cur_chan_param++;
 			}
 			break;

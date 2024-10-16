@@ -31,6 +31,7 @@
 #include <osl.h>
 #include <linux/kernel.h>
 #include <linux/vmalloc.h>
+#include <bcmstdlib_s.h>
 
 #include <bcmutils.h>
 #include <bcmwifi_channels.h>
@@ -2140,6 +2141,34 @@ free_mem:
 	}
 }
 
+static void
+wl_cfgvendor_filter_out_6g_targets(rtt_config_params_t *rtt_param)
+{
+	rtt_target_info_t* rtt_target = NULL;
+	int i;
+	int valid_idx = 0;
+	int ori_cnt = rtt_param->rtt_target_cnt;
+
+	/* filter out 6G targets
+	 * valid_idx means the pos in memory to be filled with valid target
+	 * the pos is where the 6g target were previously located
+	 */
+	rtt_target = rtt_param->target_info;
+	for (i = 0; i < rtt_param->rtt_target_cnt; i++) {
+		if (CHSPEC_BAND(rtt_target[i].chanspec) == WL_CHANSPEC_BAND_6G) {
+			continue;
+		} else {
+			memmove_s(&rtt_target[valid_idx], sizeof(rtt_target_info_t),
+				&rtt_target[i], sizeof(rtt_target_info_t));
+			valid_idx++;
+		}
+	}
+	/* should be updated by the number reduced */
+	rtt_param->rtt_target_cnt = valid_idx;
+	WL_DBG_MEM(("count before:%d after filtering out 6g rtt target:%d\n",
+		ori_cnt, rtt_param->rtt_target_cnt));
+}
+
 static int
 wl_cfgvendor_rtt_set_config(struct wiphy *wiphy, struct wireless_dev *wdev,
 	const void *data, int len) {
@@ -2339,6 +2368,15 @@ wl_cfgvendor_rtt_set_config(struct wiphy *wiphy, struct wireless_dev *wdev,
 		}
 	}
 	WL_DBG(("leave :target_cnt : %d\n", rtt_param.rtt_target_cnt));
+
+	/* filter out 6G targets */
+	wl_cfgvendor_filter_out_6g_targets(&rtt_param);
+	if (rtt_param.rtt_target_cnt <= 0) {
+		WL_ERR(("No valid targets target_cnt:%d\n", rtt_param.rtt_target_cnt));
+		err = -EINVAL;
+		goto exit;
+	}
+
 	if (dhd_dev_rtt_set_cfg(bcmcfg_to_prmry_ndev(cfg), &rtt_param) < 0) {
 		WL_ERR(("Could not set RTT configuration\n"));
 		err = -EINVAL;
@@ -2845,6 +2883,7 @@ wl_cfgvendor_set_bssid_blacklist(struct wiphy *wiphy,
 					err = -EINVAL;
 					goto exit;
 				}
+				WL_INFORM_MEM(("blacklist_flush:%d\n", flush));
 				break;
 			case GSCAN_ATTRIBUTE_BLACKLIST_BSSID:
 				if (num == 0 || !blacklist) {
@@ -2863,8 +2902,9 @@ wl_cfgvendor_set_bssid_blacklist(struct wiphy *wiphy,
 					err = -EINVAL;
 					goto exit;
 				}
-				memcpy(&(blacklist->ea[blacklist->count]), nla_data(iter),
-						ETHER_ADDR_LEN);
+				WL_INFORM_MEM(("blacklist mac_addr:" MACDBG "\n",
+					MAC2STRDBG(nla_data(iter))));
+				eacopy(nla_data(iter), &(blacklist->ea[blacklist->count]));
 				blacklist->count++;
 				break;
 		default:
@@ -2880,8 +2920,8 @@ wl_cfgvendor_set_bssid_blacklist(struct wiphy *wiphy,
 		goto exit;
 	}
 
-	err = dhd_dev_set_blacklist_bssid(bcmcfg_to_prmry_ndev(cfg),
-	          blacklist, mem_needed, flush);
+	err = wl_android_set_blacklist_bssid(wdev_to_ndev(wdev), blacklist,
+		mem_needed, flush);
 exit:
 	MFREE(cfg->osh, blacklist, mem_needed);
 	return err;
@@ -4446,6 +4486,9 @@ wl_cfgvendor_nan_parse_datapath_args(struct wiphy *wiphy,
 				return ret;
 			}
 			break;
+		case NAN_ATTRIBUTE_INST_ID:
+			/* Skip */
+			break;
 		default:
 			WL_ERR(("Unknown type, %d\n", attr_type));
 			ret = -EINVAL;
@@ -5125,6 +5168,8 @@ wl_cfgvendor_nan_parse_discover_args(struct wiphy *wiphy,
 			}
 			cmd_data->service_responder_policy = nla_get_u8(iter);
 			break;
+		case NAN_ATTRIBUTE_SVC_CFG_SUSPENDABLE:
+			break;
 		default:
 			WL_ERR(("Unknown type, %d\n", attr_type));
 			ret = -EINVAL;
@@ -5157,6 +5202,10 @@ wl_cfgvendor_nan_parse_args(struct wiphy *wiphy, const void *buf,
 
 		switch (attr_type) {
 		/* NAN Enable request attributes */
+		case NAN_ATTRIBUTE_INST_ID: {
+			/* Skip */
+			break;
+		}
 		case NAN_ATTRIBUTE_2G_SUPPORT:{
 			if (nla_len(iter) != sizeof(uint8)) {
 				ret = -EINVAL;
@@ -12305,6 +12354,7 @@ const struct nla_policy nan_attr_policy[NAN_ATTRIBUTE_MAX] = {
 	[NAN_ATTRIBUTE_INSTANT_MODE_ENABLE] = { .type = NLA_U32, .len = sizeof(uint32) },
 	[NAN_ATTRIBUTE_INSTANT_COMM_CHAN] = { .type = NLA_U32, .len = sizeof(uint32) },
 	[NAN_ATTRIBUTE_CHRE_REQUEST] = { .type = NLA_U8, .len = sizeof(uint8) },
+	[NAN_ATTRIBUTE_SVC_CFG_SUSPENDABLE] = { .type = NLA_U8, .len = sizeof(uint8) },
 };
 #endif /* WL_NAN */
 
@@ -13817,6 +13867,9 @@ int wl_cfgvendor_attach(struct wiphy *wiphy, dhd_pub_t *dhd)
 	wiphy->vendor_events	= wl_vendor_events;
 	wiphy->n_vendor_events	= ARRAY_SIZE(wl_vendor_events);
 
+#ifdef DHD_ECNTRS_EXPOSED_DBGRING
+	dhd_os_dbg_register_callback(ECNTRS_RING_ID, wl_cfgvendor_dbg_ring_send_evt);
+#endif /* DHD_ECNTRS_EXPOSED_DBGRING */
 #ifdef DEBUGABILITY
 	dhd_os_dbg_register_callback(FW_VERBOSE_RING_ID, wl_cfgvendor_dbg_ring_send_evt);
 #ifdef DHD_DEBUGABILITY_EVENT_RING

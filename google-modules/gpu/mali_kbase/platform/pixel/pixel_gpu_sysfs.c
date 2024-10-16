@@ -7,6 +7,7 @@
 
 /* Mali core includes */
 #include <mali_kbase.h>
+#include <trace/events/power.h>
 
 /* Pixel integration includes */
 #include "mali_kbase_config_platform.h"
@@ -445,6 +446,8 @@ static ssize_t hint_max_freq_store(struct device *dev, struct device_attribute *
 	if (level < 0)
 		return -EINVAL;
 
+	trace_clock_set_rate("gpu_hint_max", clock, raw_smp_processor_id());
+
 	mutex_lock(&pc->dvfs.lock);
 	gpu_dvfs_update_level_lock(kbdev, GPU_DVFS_LEVEL_LOCK_HINT, -1, level);
 	gpu_dvfs_select_level(kbdev);
@@ -488,6 +491,8 @@ static ssize_t hint_min_freq_store(struct device *dev, struct device_attribute *
 	level = get_level_from_clock(kbdev, clock);
 	if (level < 0)
 		return -EINVAL;
+
+	trace_clock_set_rate("gpu_hint_min", clock, raw_smp_processor_id());
 
 	mutex_lock(&pc->dvfs.lock);
 	gpu_dvfs_update_level_lock(kbdev, GPU_DVFS_LEVEL_LOCK_HINT, level, -1);
@@ -690,58 +695,6 @@ static ssize_t governor_store(struct device *dev, struct device_attribute *attr,
 	return ret;
 }
 
-static ssize_t ifpo_show(struct device *dev, struct device_attribute *attr, char *buf)
-{
-#ifdef CONFIG_MALI_HOST_CONTROLS_SC_RAILS
-	struct kbase_device *kbdev = dev->driver_data;
-	struct pixel_context *pc = kbdev->platform_context;
-	ssize_t ret = 0;
-
-	if (!pc)
-		return -ENODEV;
-
-	mutex_lock(&pc->pm.lock);
-	ret = scnprintf(buf, PAGE_SIZE, "%d\n", pc->pm.ifpo_enabled);
-	mutex_unlock(&pc->pm.lock);
-	return ret;
-#else
-	return -ENOTSUPP;
-#endif
-}
-
-static ssize_t ifpo_store(struct device *dev, struct device_attribute *attr,
-	const char *buf, size_t count)
-{
-#ifdef CONFIG_MALI_HOST_CONTROLS_SC_RAILS
-	int ret;
-	bool enabled;
-	struct kbase_device *kbdev = dev->driver_data;
-	struct pixel_context *pc = kbdev->platform_context;
-	if (!pc)
-		return -ENODEV;
-
-	ret = strtobool(buf, &enabled);
-	if (ret)
-		return -EINVAL;
-
-	mutex_lock(&kbdev->csf.scheduler.lock);
-
-	if (!enabled) {
-		turn_on_sc_power_rails(kbdev);
-	}
-
-	mutex_lock(&pc->pm.lock);
-	pc->pm.ifpo_enabled = enabled;
-	mutex_unlock(&pc->pm.lock);
-	mutex_unlock(&kbdev->csf.scheduler.lock);
-
-	return count;
-#else
-	return -ENOTSUPP;
-#endif
-}
-
-
 /* Define devfreq-like attributes */
 DEVICE_ATTR_RO(available_frequencies);
 DEVICE_ATTR_RO(cur_freq);
@@ -756,7 +709,6 @@ DEVICE_ATTR_RO(time_in_state);
 DEVICE_ATTR_RO(trans_stat);
 DEVICE_ATTR_RO(available_governors);
 DEVICE_ATTR_RW(governor);
-DEVICE_ATTR_RW(ifpo);
 
 /* Initialization code */
 
@@ -790,7 +742,6 @@ static struct {
 	{ "available_governors", &dev_attr_available_governors },
 	{ "governor", &dev_attr_governor },
 	{ "trigger_core_dump", &dev_attr_trigger_core_dump },
-	{ "ifpo", &dev_attr_ifpo }
 };
 
 /**

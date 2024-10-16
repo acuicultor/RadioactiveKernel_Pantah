@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note
 /*
  *
- * (C) COPYRIGHT 2015, 2017-2022 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2015-2023 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -32,7 +32,6 @@
 
 #include "mali_kbase_config_platform.h"
 
-
 static struct reset_control **resets;
 static int nr_resets;
 
@@ -50,14 +49,12 @@ static int resets_init(struct kbase_device *kbdev)
 		return nr_resets;
 	}
 
-	resets = devm_kcalloc(kbdev->dev, nr_resets, sizeof(*resets),
-			GFP_KERNEL);
+	resets = devm_kcalloc(kbdev->dev, (size_t)nr_resets, sizeof(*resets), GFP_KERNEL);
 	if (!resets)
 		return -ENOMEM;
 
 	for (i = 0; i < nr_resets; ++i) {
-		resets[i] = devm_reset_control_get_exclusive_by_index(
-				kbdev->dev, i);
+		resets[i] = devm_reset_control_get_exclusive_by_index(kbdev->dev, i);
 		if (IS_ERR(resets[i])) {
 			err = PTR_ERR(resets[i]);
 			nr_resets = i;
@@ -89,9 +86,8 @@ static int pm_callback_soft_reset(struct kbase_device *kbdev)
 	udelay(10);
 
 	/* Override Power Management Settings, values from manufacturer's defaults */
-	kbase_reg_write(kbdev, GPU_CONTROL_REG(PWR_KEY), 0x2968A819);
-	kbase_reg_write(kbdev, GPU_CONTROL_REG(PWR_OVERRIDE1),
-			0xfff | (0x20 << 16));
+	kbase_reg_write32(kbdev, GPU_CONTROL_ENUM(PWR_KEY), 0x2968A819);
+	kbase_reg_write32(kbdev, GPU_CONTROL_ENUM(PWR_OVERRIDE1), 0xfff | (0x20 << 16));
 
 	/*
 	 * RESET_COMPLETED interrupt will be raised, so continue with
@@ -149,7 +145,7 @@ static int pm_callback_power_on(struct kbase_device *kbdev)
 	int ret = 1; /* Assume GPU has been powered off */
 	int error;
 
-	dev_dbg(kbdev->dev, "%s %p\n", __func__, (void *)kbdev->dev->pm_domain);
+	dev_dbg(kbdev->dev, "%s %pK\n", __func__, (void *)kbdev->dev->pm_domain);
 
 #ifdef KBASE_PM_RUNTIME
 	error = pm_runtime_get_sync(kbdev->dev);
@@ -202,6 +198,10 @@ static int kbase_device_runtime_init(struct kbase_device *kbdev)
 			 __func__, atomic_read(&kbdev->dev->power.usage_count));
 		ret = -EINVAL;
 	}
+
+	/* allocate resources for reset */
+	if (!ret)
+		ret = resets_init(kbdev);
 
 	return ret;
 }
@@ -256,10 +256,18 @@ struct kbase_pm_callback_conf pm_callbacks = {
 	.power_runtime_term_callback = kbase_device_runtime_disable,
 	.power_runtime_on_callback = pm_callback_runtime_on,
 	.power_runtime_off_callback = pm_callback_runtime_off,
-#else				/* KBASE_PM_RUNTIME */
+#else /* KBASE_PM_RUNTIME */
 	.power_runtime_init_callback = NULL,
 	.power_runtime_term_callback = NULL,
 	.power_runtime_on_callback = NULL,
 	.power_runtime_off_callback = NULL,
 #endif				/* KBASE_PM_RUNTIME */
+
+#if MALI_USE_CSF && defined(KBASE_PM_RUNTIME)
+	.power_runtime_gpu_idle_callback = pm_callback_runtime_gpu_idle,
+	.power_runtime_gpu_active_callback = pm_callback_runtime_gpu_active,
+#else
+	.power_runtime_gpu_idle_callback = NULL,
+	.power_runtime_gpu_active_callback = NULL,
+#endif
 };

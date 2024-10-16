@@ -4256,8 +4256,6 @@ static int pca9468_const_charge_voltage(struct pca9468_charger *pca9468)
 	return (val * 5 + 3725) * 1000;
 }
 
-#define get_boot_sec() div_u64(ktime_to_ns(ktime_get_boottime()), NSEC_PER_SEC)
-
 /* index is the PPS source to use */
 static int pca9468_set_charging_enabled(struct pca9468_charger *pca9468, int index)
 {

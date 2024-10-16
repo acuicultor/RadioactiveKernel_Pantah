@@ -33,8 +33,8 @@
 #include <mali_kbase_config_defaults.h>
 #include <mali_kbase_pm.h>
 
-/**
- * The number of times the adaptive power off hysteresis timer can fire without
+
+/* The number of times the adaptive power off hysteresis timer can fire without
  * an intervening GPU active period before power off hysteresis is set to 0.
  */
 #ifndef DEFAULT_PM_ADAPTIVE_HYSTERESIS

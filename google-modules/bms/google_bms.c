@@ -275,7 +275,7 @@ int gbms_aacr_fade10(const struct gbms_chg_profile *profile, int cycles)
 	if (profile->aacr_nb_limits == 0 || cycles < 0)
 		return -EINVAL;
 
-	for (idx = 0; idx < profile->aacr_nb_limits; idx++)
+	for (idx = 0; idx < profile->aacr_nb_limits - 1; idx++)
 		if (cycles < profile->reference_cycles[idx])
 			break;
 
@@ -431,7 +431,7 @@ EXPORT_SYMBOL_GPL(gbms_dump_raw_profile);
 int gbms_msc_round_fv_uv(const struct gbms_chg_profile *profile,
 			   int vtier, int fv_uv, int cc_ua)
 {
-	int result;
+	int result, fv_uv_orig = fv_uv;
 	const unsigned int fv_uv_max = (vtier / 1000) * profile->fv_uv_margin_dpct;
 	const unsigned int dc_fv_uv_max = vtier + (cc_ua / 1000) * profile->fv_dc_ratio;
 	const unsigned int last_fv = profile->volt_limits[profile->volt_nb_limits - 1];
@@ -447,11 +447,12 @@ int gbms_msc_round_fv_uv(const struct gbms_chg_profile *profile,
 	if (fv_max != 0 && fv_uv > fv_max)
 		fv_uv = fv_max;
 
+	fv_uv += profile->fv_uv_resolution / 2;
 	result = fv_uv - (fv_uv % profile->fv_uv_resolution);
 
 	if (fv_max != 0)
 		gbms_info(profile, "MSC_ROUND: fv_uv=%d vtier=%d fv_uv_max=%d -> %d\n",
-			  fv_uv, vtier, fv_max, result);
+			  fv_uv_orig, vtier, fv_max, result);
 
 	return result;
 }
@@ -715,6 +716,30 @@ void gbms_logbuffer_prlog(struct logbuffer *log, int level, int debug_no_logbuff
 	va_end(args);
 }
 EXPORT_SYMBOL_GPL(gbms_logbuffer_prlog);
+
+void gbms_logbuffer_devlog(struct logbuffer *log, struct device *dev, int level,
+			  int debug_no_logbuffer, int debug_printk_prlog,
+			  const char *f, ...)
+{
+	struct va_format vaf;
+	va_list args;
+
+	va_start(args, f);
+
+	vaf.fmt = f;
+	vaf.va = &args;
+
+	if (!debug_no_logbuffer)
+		logbuffer_vlog(log, f, args);
+
+	if (level <= debug_printk_prlog)
+		dev_printk_emit(level, dev, "%s %s: %pV",
+				dev_driver_string(dev),
+				dev_name(dev), &vaf);
+
+	va_end(args);
+}
+EXPORT_SYMBOL_GPL(gbms_logbuffer_devlog);
 
 bool chg_state_is_disconnected(const union gbms_charger_state *chg_state)
 {

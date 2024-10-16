@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note
 /*
  *
- * (C) COPYRIGHT 2015-2022 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2015-2024 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -28,7 +28,6 @@
 #include <linux/regulator/consumer.h>
 
 #include "mali_kbase_config_platform.h"
-
 
 static void enable_gpu_power_control(struct kbase_device *kbdev)
 {
@@ -62,7 +61,6 @@ static void disable_gpu_power_control(struct kbase_device *kbdev)
 			clk_disable_unprepare(kbdev->clocks[i]);
 			WARN_ON(__clk_is_enabled(kbdev->clocks[i]));
 		}
-
 	}
 
 #if defined(CONFIG_REGULATOR)
@@ -82,8 +80,7 @@ static int pm_callback_power_on(struct kbase_device *kbdev)
 	int error;
 	unsigned long flags;
 
-	dev_dbg(kbdev->dev, "%s %p\n", __func__,
-			(void *)kbdev->dev->pm_domain);
+	dev_dbg(kbdev->dev, "%s %pK\n", __func__, (void *)kbdev->dev->pm_domain);
 
 	spin_lock_irqsave(&kbdev->hwaccess_lock, flags);
 	WARN_ON(kbdev->pm.backend.gpu_powered);
@@ -137,7 +134,7 @@ static void pm_callback_power_off(struct kbase_device *kbdev)
 
 	/* Power down the GPU immediately */
 	disable_gpu_power_control(kbdev);
-#else  /* MALI_USE_CSF */
+#else /* MALI_USE_CSF */
 	spin_unlock_irqrestore(&kbdev->hwaccess_lock, flags);
 
 #ifdef KBASE_PM_RUNTIME
@@ -219,9 +216,8 @@ static int kbase_device_runtime_init(struct kbase_device *kbdev)
 		dev_warn(kbdev->dev, "pm_runtime not enabled");
 		ret = -EINVAL;
 	} else if (atomic_read(&kbdev->dev->power.usage_count)) {
-		dev_warn(kbdev->dev,
-			 "%s: Device runtime usage count unexpectedly non zero %d",
-			__func__, atomic_read(&kbdev->dev->power.usage_count));
+		dev_warn(kbdev->dev, "%s: Device runtime usage count unexpectedly non zero %d",
+			 __func__, atomic_read(&kbdev->dev->power.usage_count));
 		ret = -EINVAL;
 	}
 
@@ -233,9 +229,8 @@ static void kbase_device_runtime_disable(struct kbase_device *kbdev)
 	dev_dbg(kbdev->dev, "%s\n", __func__);
 
 	if (atomic_read(&kbdev->dev->power.usage_count))
-		dev_warn(kbdev->dev,
-			 "%s: Device runtime usage count unexpectedly non zero %d",
-			__func__, atomic_read(&kbdev->dev->power.usage_count));
+		dev_warn(kbdev->dev, "%s: Device runtime usage count unexpectedly non zero %d",
+			 __func__, atomic_read(&kbdev->dev->power.usage_count));
 
 	pm_runtime_disable(kbdev->dev);
 }
@@ -272,17 +267,6 @@ static void pm_callback_suspend(struct kbase_device *kbdev)
 	pm_callback_runtime_off(kbdev);
 }
 
-#ifdef CONFIG_MALI_HOST_CONTROLS_SC_RAILS
-static void pm_callback_sc_rails_on(struct kbase_device *kbdev)
-{
-	dev_dbg(kbdev->dev, "SC rails are on");
-}
-
-static void pm_callback_sc_rails_off(struct kbase_device *kbdev)
-{
-	dev_dbg(kbdev->dev, "SC rails are off");
-}
-#endif
 
 struct kbase_pm_callback_conf pm_callbacks = {
 	.power_on_callback = pm_callback_power_on,
@@ -294,12 +278,12 @@ struct kbase_pm_callback_conf pm_callbacks = {
 	.power_runtime_term_callback = kbase_device_runtime_disable,
 	.power_runtime_on_callback = pm_callback_runtime_on,
 	.power_runtime_off_callback = pm_callback_runtime_off,
-#else				/* KBASE_PM_RUNTIME */
+#else /* KBASE_PM_RUNTIME */
 	.power_runtime_init_callback = NULL,
 	.power_runtime_term_callback = NULL,
 	.power_runtime_on_callback = NULL,
 	.power_runtime_off_callback = NULL,
-#endif				/* KBASE_PM_RUNTIME */
+#endif /* KBASE_PM_RUNTIME */
 
 #if MALI_USE_CSF && defined(KBASE_PM_RUNTIME)
 	.power_runtime_gpu_idle_callback = pm_callback_runtime_gpu_idle,
@@ -308,11 +292,4 @@ struct kbase_pm_callback_conf pm_callbacks = {
 	.power_runtime_gpu_idle_callback = NULL,
 	.power_runtime_gpu_active_callback = NULL,
 #endif
-
-#ifdef CONFIG_MALI_HOST_CONTROLS_SC_RAILS
-	.power_on_sc_rails_callback = pm_callback_sc_rails_on,
-	.power_off_sc_rails_callback = pm_callback_sc_rails_off,
-#endif
 };
-
-

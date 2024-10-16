@@ -47,6 +47,16 @@
 #define BTS_UNSUPPORTED -1
 #define MAX_UNIFIED_POWER_DEVICE 8
 
+/* enum lwis_client_flush_state
+ * Client flush states indicate if the client has been issued a
+ * flush on the transaction worker threads.
+ * Client will move to FLUSHING state only when a direct call to
+ * lwis_transaction_client_flush has been made.
+ * Once the flush is complete, the client will transition back
+ * to NOT_FLUSHING state.
+ */
+enum lwis_client_flush_state { NOT_FLUSHING, FLUSHING };
+
 /* Forward declaration for lwis_device. This is needed for the declaration for
    lwis_device_subclass_operations data struct. */
 struct lwis_device;
@@ -290,10 +300,13 @@ struct lwis_device {
 
 	/* LWIS allocator block manager */
 	struct lwis_allocator_block_mgr *block_mgr;
+	spinlock_t allocator_lock;
 
 	/* Worker thread */
 	struct kthread_worker transaction_worker;
 	struct task_struct *transaction_worker_thread;
+	/* Limit on number of transactions to be processed at a time */
+	int transaction_process_limit;
 };
 
 /*
@@ -345,6 +358,14 @@ struct lwis_client {
 	struct list_head node;
 	/* Mark if the client called device enable */
 	bool is_enabled;
+	/* Work item to schedule I2C transfers */
+	struct kthread_work i2c_work;
+	/* Indicates if the client has been issued a flush worker call */
+	enum lwis_client_flush_state flush_state;
+	/* Lock to guard client's flush state changes */
+	spinlock_t flush_lock;
+	/* Lock to guard client's buffer changes */
+	spinlock_t buffer_lock;
 };
 
 /*
@@ -427,5 +448,19 @@ void lwis_save_register_io_info(struct lwis_device *lwis_dev, struct lwis_io_ent
  * periodic io queue on the transaction thread
  */
 void lwis_process_worker_queue(struct lwis_client *client);
+
+/*
+ * lwis_queue_device_worker:
+ * Function to queue periodic or transaction work on the device
+ * worker.
+ */
+void lwis_queue_device_worker(struct lwis_client *client);
+
+/*
+ * lwis_flush_device_worker:
+ * Function to flush periodic or transaction work from the device
+ * worker.
+ */
+void lwis_flush_device_worker(struct lwis_client *client);
 
 #endif /* LWIS_DEVICE_H_ */

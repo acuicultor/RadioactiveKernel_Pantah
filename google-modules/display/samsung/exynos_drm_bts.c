@@ -742,6 +742,8 @@ static void dpu_bts_convert_config_to_info(struct bts_dpp_info *dpp,
 
 static void dpu_bts_calc_bw(struct decon_device *decon)
 {
+	struct drm_crtc *crtc = &decon->crtc->base;
+	struct drm_crtc_state *crtc_state = crtc->state;
 	struct dpu_bts_win_config *config;
 	struct bts_decon_info bts_info;
 	int idx, i, wb_idx = -1, rcd_idx = -1;
@@ -837,7 +839,7 @@ static void dpu_bts_calc_bw(struct decon_device *decon)
 		decon->bts.max_disp_freq = dpu_bts_calc_disp_with_full_size(decon);
 	}
 
-	DPU_EVENT_LOG(DPU_EVT_BTS_CALC_BW, decon->id, NULL);
+	DPU_EVENT_LOG(DPU_EVT_BTS_CALC_BW, decon->id, crtc_state);
 	DPU_DEBUG_BTS("%s -\n", __func__);
 }
 

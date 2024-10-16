@@ -162,3 +162,8 @@ int lwis_set_kthread_priority(struct lwis_device *lwis_dev, struct task_struct *
 
 	return 0;
 }
+
+bool lwis_check_device_type(struct lwis_device *lwis_dev, int32_t type)
+{
+	return ((lwis_dev) && (lwis_dev->type == type));
+}

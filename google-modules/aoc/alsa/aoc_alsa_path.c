@@ -484,7 +484,7 @@ static struct snd_soc_dai_driver aoc_dai_drv[] = {
 					SNDRV_PCM_FMTBIT_S24_LE |
 					SNDRV_PCM_FMTBIT_S32_LE,
 			.channels_min = 1,
-			.channels_max = 4,
+			.channels_max = 8,
 		},
 		.name = "audio_incall_cap_0",
 		.id = IDX_INCALL_CAP0_TX,
@@ -498,7 +498,7 @@ static struct snd_soc_dai_driver aoc_dai_drv[] = {
 					SNDRV_PCM_FMTBIT_S24_LE |
 					SNDRV_PCM_FMTBIT_S32_LE,
 			.channels_min = 1,
-			.channels_max = 4,
+			.channels_max = 8,
 		},
 		.name = "audio_incall_cap_1",
 		.id = IDX_INCALL_CAP1_TX,
@@ -512,7 +512,7 @@ static struct snd_soc_dai_driver aoc_dai_drv[] = {
 					SNDRV_PCM_FMTBIT_S24_LE |
 					SNDRV_PCM_FMTBIT_S32_LE,
 			.channels_min = 1,
-			.channels_max = 4,
+			.channels_max = 8,
 		},
 		.name = "audio_incall_cap_2",
 		.id = IDX_INCALL_CAP2_TX,
@@ -2335,6 +2335,7 @@ static int aoc_path_probe(struct platform_device *pdev)
 		pr_err("%s: fail to reigster aoc path compon %d", __func__,
 		       ret);
 	}
+
 	return ret;
 }
 

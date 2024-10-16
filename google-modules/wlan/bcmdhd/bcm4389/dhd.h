@@ -929,7 +929,8 @@ typedef enum dhd_ring_id {
 	DEBUG_DUMP_RING1_ID = 0x8,
 	DEBUG_DUMP_RING2_ID = 0x9,
 	MEM_DUMP_RING_ID = 0xa,
-	DEBUG_RING_ID_MAX = 0xb
+	ECNTRS_RING_ID = 0xb,
+	DEBUG_RING_ID_MAX = 0xc
 } dhd_ring_id_t;
 
 #define HEALTH_CHK_BUF_SIZE 256
@@ -3897,6 +3898,7 @@ extern int dhd_coredump_mempool_init(dhd_pub_t *dhd);
 extern void dhd_coredump_mempool_deinit(dhd_pub_t *dhd);
 #define DHD_COREDUMP_MEMPOOL_INIT(dhdp)		dhd_coredump_mempool_init(dhdp)
 #define DHD_COREDUMP_MEMPOOL_DEINIT(dhdp)	dhd_coredump_mempool_deinit(dhdp)
+#define DHD_COREDUMP_IGNORE_TRAP_SIG "host_wake_asserted_for_too_long"
 #else
 #define DHD_COREDUMP_MEMPOOL_INIT(dhdp)		do { /* noop */ } while (0)
 #define DHD_COREDUMP_MEMPOOL_DEINIT(dhdp)	do { /* noop */ } while (0)

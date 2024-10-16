@@ -303,6 +303,8 @@ void DPU_EVENT_LOG(enum dpu_event_type type, int index, void *priv)
 		log->data.bts_cal.read_bw = decon->bts.read_bw;
 		log->data.bts_cal.write_bw = decon->bts.write_bw;
 		log->data.bts_cal.fps = decon->bts.fps;
+		crtc_state = (struct drm_crtc_state *)priv;
+		log->data.bts_cal.crtc_fps = drm_mode_vrefresh(&crtc_state->mode);
 		break;
 	case DPU_EVT_DSIM_UNDERRUN:
 		dpu_event_save_freqs(&log->data.bts_event.freqs);
@@ -875,10 +877,11 @@ static void dpu_event_log_print(const struct decon_device *decon, struct drm_pri
 			break;
 		case DPU_EVT_BTS_CALC_BW:
 			scnprintf(buf + len, sizeof(buf) - len,
-					"\tdisp(%u) peak(%u) rt(%u) read(%u) write(%u) %uhz",
+					"\tdisp(%u) peak(%u) rt(%u) read(%u) write(%u) %uhz (crtc: %uhz)",
 					log->data.bts_cal.disp_freq, log->data.bts_cal.peak,
 					log->data.bts_cal.rt_avg_bw, log->data.bts_cal.read_bw,
-					log->data.bts_cal.write_bw, log->data.bts_cal.fps);
+					log->data.bts_cal.write_bw, log->data.bts_cal.fps,
+					log->data.bts_cal.crtc_fps);
 			break;
 		case DPU_EVT_DSIM_UNDERRUN:
 			scnprintf(buf + len, sizeof(buf) - len,

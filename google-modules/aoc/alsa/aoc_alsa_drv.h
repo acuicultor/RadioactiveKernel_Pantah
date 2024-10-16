@@ -18,9 +18,6 @@
 #include <linux/poll.h>
 #include "aoc.h"
 
-/* TODO: it may not be needed later, depending on aoc_ipc header revision */
-#include "aoc_ipc_core_internal.h"
-
 typedef enum {
     AOC_SERVICE_EVENT_DOWN = 0,
     AOC_SERVICE_EVENT_MAX,

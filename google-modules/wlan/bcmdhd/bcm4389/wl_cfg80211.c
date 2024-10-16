@@ -2270,6 +2270,11 @@ wl_cfg80211_p2p_if_add(struct bcm_cfg80211 *cfg,
 
 			return new_ndev->ieee80211_ptr;
 	}
+	else {
+		WL_ERR(("Virtual interface create fail. "
+			"Checking value timeout [%ld], p2p_status [%x], event_info valid [%x]\n",
+			timeout, wl_get_p2p_status(cfg, IF_ADDING), cfg->if_event_info.valid));
+	}
 
 fail:
 	return NULL;
@@ -6127,17 +6132,6 @@ wl_do_preassoc_ops(struct bcm_cfg80211 *cfg,
 		wl_restore_ap_bw(cfg);
 	}
 #endif /* SUPPORT_AP_BWCTRL */
-#if defined(ROAMEXP_SUPPORT)
-	/* Clear Blacklist bssid and Whitelist ssid list before join issue
-	 * This is temporary fix since currently firmware roaming is not
-	 * disabled by android framework before SSID join from framework
-	*/
-	/* Flush blacklist bssid content */
-	dhd_dev_set_blacklist_bssid(dev, NULL, 0, true);
-	/* Flush whitelist ssid content */
-	dhd_dev_set_whitelist_ssid(dev, NULL, 0, true);
-#endif /* ROAMEXP_SUPPORT */
-
 	WL_DBG(("SME IE : len=%zu\n", sme->ie_len));
 	if (sme->ie != NULL && sme->ie_len > 0 && (wl_dbg_level & WL_DBG_DBG)) {
 		prhex(NULL, sme->ie, sme->ie_len);
@@ -6928,6 +6922,11 @@ wl_cfg80211_connect(struct wiphy *wiphy, struct net_device *dev,
 		WL_ERR(("Blocking connect request as another STA interface"
 			" with same MAC address already connected\n"));
 		err = -EINVAL;
+		goto fail;
+	}
+	if (wl_get_drv_status_all(cfg, AP_CREATING)) {
+		WL_ERR(("AP creates in progress, so skip this connection for creating AP.\n"));
+		err = -EBUSY;
 		goto fail;
 	}
 #endif /* WL_DUAL_STA */
@@ -12835,6 +12834,13 @@ wl_post_linkdown_ops(struct bcm_cfg80211 *cfg,
 	}
 #endif /* SUPPORT_SET_TID */
 
+#if defined(ROAMEXP_SUPPORT)
+	/* Flush blacklist bssid content */
+	wl_android_set_blacklist_bssid(ndev, NULL, 0, TRUE);
+	/* Flush whitelist ssid content */
+	wl_android_set_whitelist_ssid(ndev, NULL, 0, TRUE);
+#endif /* ROAMEXP_SUPPORT */
+
 	return ret;
 }
 
@@ -15296,10 +15302,6 @@ wl_notify_rx_mgmt_frame(struct bcm_cfg80211 *cfg, bcm_struct_cfgdev *cfgdev,
 #if defined(BCMDONGLEHOST) && defined(TDLS_MSG_ONLY_WFD) && defined(WLTDLS)
 	dhd_pub_t *dhdp = (dhd_pub_t *)(cfg->pub);
 #endif /* BCMDONGLEHOST && TDLS_MSG_ONLY_WFD && WLTDLS */
-	if (ntoh32(e->datalen) < sizeof(wl_event_rx_frame_data_t)) {
-		WL_ERR(("wrong datalen:%d\n", ntoh32(e->datalen)));
-		return -EINVAL;
-	}
 
 	rxframe = (wl_event_rx_frame_data_t *)data;
 	if (!rxframe) {
@@ -15309,9 +15311,19 @@ wl_notify_rx_mgmt_frame(struct bcm_cfg80211 *cfg, bcm_struct_cfgdev *cfgdev,
 
 	/* Handle different versions of Rx frame data */
 	if (ntoh16(rxframe->version) == BCM_RX_FRAME_DATA_VERSION_1) {
+		if (ntoh32(e->datalen) < sizeof(wl_event_rx_frame_data_v1_t)) {
+			WL_ERR(("wrong datalen:%d for rxframe v1:%lu\n",
+				ntoh32(e->datalen), sizeof(wl_event_rx_frame_data_v1_t)));
+			return -EINVAL;
+		}
 		mgmt_frame_len = ntoh32(e->datalen) - (uint32)sizeof(wl_event_rx_frame_data_v1_t);
 		rx_event_data = (u8 *) ((wl_event_rx_frame_data_v1_t *)rxframe + 1);
 	} else if (ntoh16(rxframe->version) == BCM_RX_FRAME_DATA_VERSION_2) {
+		if (ntoh32(e->datalen) < sizeof(wl_event_rx_frame_data_v2_t)) {
+			WL_ERR(("wrong datalen:%d for rxframe v2:%lu\n",
+				ntoh32(e->datalen), sizeof(wl_event_rx_frame_data_v2_t)));
+			return -EINVAL;
+		}
 		mgmt_frame_len = ntoh32(e->datalen) - (uint32)sizeof(wl_event_rx_frame_data_v2_t);
 		rx_event_data = (u8 *) ((wl_event_rx_frame_data_v2_t *)rxframe + 1);
 	} else {
@@ -15865,6 +15877,7 @@ static void wl_init_event_handler(struct bcm_cfg80211 *cfg)
 	cfg->evt_handler[WLC_E_NAN_CRITICAL] = wl_cfgnan_notify_nan_status;
 	cfg->evt_handler[WLC_E_NAN_NON_CRITICAL] = wl_cfgnan_notify_nan_status;
 #endif /* WL_NAN */
+	cfg->evt_handler[WLC_E_CSA_START_IND] = wl_cfgvif_csa_start_ind;
 	cfg->evt_handler[WLC_E_CSA_COMPLETE_IND] = wl_csa_complete_ind;
 	cfg->evt_handler[WLC_E_AP_STARTED] = wl_ap_start_ind;
 #ifdef CUSTOM_EVENT_PM_WAKE
@@ -18839,6 +18852,7 @@ static s32 __wl_cfg80211_down(struct bcm_cfg80211 *cfg)
 		wl_clr_drv_status(cfg, AP_CREATING, iter->ndev);
 		wl_clr_drv_status(cfg, NESTED_CONNECT, iter->ndev);
 		wl_clr_drv_status(cfg, CFG80211_CONNECT, iter->ndev);
+		wl_clr_drv_status(cfg, CSA_ACTIVE, iter->ndev);
 	}
 #ifdef WL_CFG80211_MONITOR
 	if (ndev->ieee80211_ptr->iftype != NL80211_IFTYPE_MONITOR)
@@ -25710,7 +25724,7 @@ int wl_get_usable_channels(struct bcm_cfg80211 *cfg, usable_channel_info_t *u_in
 		}
 
 		/* Supplicant does scan passive channel but not for DFS channel */
-		if (!(chaninfo & WL_CHAN_RADAR) && !ch_160mhz_5g &&
+		if (!restrict_chan && !ch_160mhz_5g &&
 			!CHSPEC_IS6G(chspec) && (!is_unii4)) {
 			mask |= (1 << WIFI_INTERFACE_P2P_CLIENT);
 		}

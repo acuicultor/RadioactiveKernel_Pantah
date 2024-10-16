@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 /*
  *
- * (C) COPYRIGHT 2013-2022 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2013-2024 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -126,7 +126,7 @@ enum {
 
 /* Default scheduling tick granuality (can be overridden by platform header) */
 #ifndef DEFAULT_JS_SCHEDULING_PERIOD_NS
-#define DEFAULT_JS_SCHEDULING_PERIOD_NS    (100000000u) /* 100ms */
+#define DEFAULT_JS_SCHEDULING_PERIOD_NS (100000000u) /* 100ms */
 #endif
 
 /* Default minimum number of scheduling ticks before jobs are soft-stopped.
@@ -134,21 +134,21 @@ enum {
  * This defines the time-slice for a job (which may be different from that of a
  * context)
  */
-#define DEFAULT_JS_SOFT_STOP_TICKS       (1) /* 100ms-200ms */
+#define DEFAULT_JS_SOFT_STOP_TICKS (1) /* 100ms-200ms */
 
 /* Default minimum number of scheduling ticks before CL jobs are soft-stopped. */
-#define DEFAULT_JS_SOFT_STOP_TICKS_CL    (1) /* 100ms-200ms */
+#define DEFAULT_JS_SOFT_STOP_TICKS_CL (1) /* 100ms-200ms */
 
 /* Default minimum number of scheduling ticks before jobs are hard-stopped */
-#define DEFAULT_JS_HARD_STOP_TICKS_SS    (50 * TICK_MULTIPLIER) /* Default: 5s */
+#define DEFAULT_JS_HARD_STOP_TICKS_SS (50 * TICK_MULTIPLIER) /* Default: 5s */
 
 /* Default minimum number of scheduling ticks before CL jobs are hard-stopped. */
-#define DEFAULT_JS_HARD_STOP_TICKS_CL    (50) /* 5s */
+#define DEFAULT_JS_HARD_STOP_TICKS_CL (50) /* 5s */
 
 /* Default minimum number of scheduling ticks before jobs are hard-stopped
  * during dumping
  */
-#define DEFAULT_JS_HARD_STOP_TICKS_DUMPING   (15000) /* 1500s */
+#define DEFAULT_JS_HARD_STOP_TICKS_DUMPING (15000) /* 1500s */
 
 /* Default timeout for some software jobs, after which the software event wait
  * jobs will be cancelled.
@@ -158,17 +158,17 @@ enum {
 /* Default minimum number of scheduling ticks before the GPU is reset to clear a
  * "stuck" job
  */
-#define DEFAULT_JS_RESET_TICKS_SS           (55 * TICK_MULTIPLIER) /* Default: 5.5s */
+#define DEFAULT_JS_RESET_TICKS_SS (55 * TICK_MULTIPLIER) /* Default: 5.5s */
 
 /* Default minimum number of scheduling ticks before the GPU is reset to clear a
  * "stuck" CL job.
  */
-#define DEFAULT_JS_RESET_TICKS_CL        (55) /* 5.5s */
+#define DEFAULT_JS_RESET_TICKS_CL (55) /* 5.5s */
 
 /* Default minimum number of scheduling ticks before the GPU is reset to clear a
  * "stuck" job during dumping.
  */
-#define DEFAULT_JS_RESET_TICKS_DUMPING   (15020) /* 1502s */
+#define DEFAULT_JS_RESET_TICKS_DUMPING (15020) /* 1502s */
 
 /* Nominal reference frequency that was used to obtain all following
  * <...>_TIMEOUT_CYCLES macros, in kHz.
@@ -183,6 +183,7 @@ enum {
  *
  * This is also the default timeout to be used when an invalid timeout
  * selector is used to retrieve the timeout on CSF GPUs.
+ * This shouldn't be used as a timeout for the CSG suspend request.
  *
  * Based on 75000ms timeout at nominal 100MHz, as is required for Android - based
  * on scaling from a 50MHz GPU system.
@@ -196,17 +197,30 @@ enum {
  */
 #define CSF_PM_TIMEOUT_CYCLES (250000000)
 
-/* Waiting timeout in clock cycles for GPU reset to complete.
+/* Waiting timeout in clock cycles for a CSG to be suspended.
  *
- * Based on 2500ms timeout at 100MHz, scaled from a 50MHz GPU system
+ * Based on 30s timeout at 100MHz, scaled from 5s at 600Mhz GPU frequency.
+ * More cycles (1s @ 100Mhz = 100000000) are added up to ensure that
+ * host timeout is always bigger than FW timeout.
  */
-#define CSF_GPU_RESET_TIMEOUT_CYCLES (250000000)
+/* pixel: b/319408928 - CSF_CSG_SUSPEND_TIMEOUT_CYCLES is set to 2s@100MHz. */
+#define CSF_CSG_SUSPEND_TIMEOUT_CYCLES (200000000ull)
 
-/* Waiting timeout in clock cycles for all active CSGs to be suspended.
+/* Waiting timeout in clock cycles for GPU suspend to complete. */
+#define CSF_GPU_SUSPEND_TIMEOUT_CYCLES (CSF_CSG_SUSPEND_TIMEOUT_CYCLES)
+
+/* Waiting timeout in clock cycles for GPU reset to complete. */
+#define CSF_GPU_RESET_TIMEOUT_CYCLES (CSF_CSG_SUSPEND_TIMEOUT_CYCLES * 2)
+
+/* Waiting timeout in clock cycles for a CSG to be terminated.
  *
- * Based on 1500ms timeout at 100MHz, scaled from a 50MHz GPU system.
+ * Based on 0.6s timeout at 100MHZ, scaled from 0.1s at 600Mhz GPU frequency
+ * which is the timeout defined in FW to wait for iterator to complete the
+ * transitioning to DISABLED state.
+ * More cycles (0.4s @ 100Mhz = 40000000) are added up to ensure that
+ * host timeout is always bigger than FW timeout.
  */
-#define CSF_CSG_SUSPEND_TIMEOUT_CYCLES (150000000)
+#define CSF_CSG_TERM_TIMEOUT_CYCLES (100000000)
 
 /* Waiting timeout in clock cycles for GPU firmware to boot.
  *
@@ -220,6 +234,36 @@ enum {
  */
 #define CSF_FIRMWARE_PING_TIMEOUT_CYCLES (600000000ull)
 
+/* Waiting timeout for a KCPU queue's fence signal blocked to long, in clock cycles.
+ *
+ * Based on 10s timeout at 100MHz, scaled from a 50MHz GPU system.
+ */
+#if IS_ENABLED(CONFIG_MALI_IS_FPGA)
+#define KCPU_FENCE_SIGNAL_TIMEOUT_CYCLES (2500000000ull)
+#else
+#define KCPU_FENCE_SIGNAL_TIMEOUT_CYCLES (1000000000ull)
+#endif
+
+/* Timeout for polling the GPU in clock cycles.
+ *
+ * Based on 10s timeout based on original MAX_LOOPS value.
+ */
+#define IPA_INACTIVE_TIMEOUT_CYCLES (1000000000ull)
+
+/* Timeout for polling the GPU for the MCU status in clock cycles.
+ *
+ * Based on 120s timeout based on original MAX_LOOPS value.
+ */
+#define CSF_FIRMWARE_STOP_TIMEOUT_CYCLES (12000000000ull)
+
+
+/* Waiting timeout for task execution on an endpoint. Based on the
+ * DEFAULT_PROGRESS_TIMEOUT.
+ *
+ * Based on 25s timeout at 100Mhz, scaled from a 500MHz GPU system.
+ */
+#define DEFAULT_PROGRESS_TIMEOUT_CYCLES (2500000000ull)
+
 #else /* MALI_USE_CSF */
 
 /* A default timeout in clock cycles to be used when an invalid timeout
@@ -232,7 +276,35 @@ enum {
  */
 #define JM_DEFAULT_RESET_TIMEOUT_MS (3000) /* 3s */
 
-#endif /* MALI_USE_CSF */
+/* Default timeout in clock cycles to be used when checking if JS_COMMAND_NEXT
+ * is updated on HW side so a Job Slot is considered free.
+ * This timeout will only take effect on GPUs with low value for the minimum
+ * GPU clock frequency (<= 100MHz).
+ *
+ * Based on 1ms timeout at 100MHz. Will default to 0ms on GPUs with higher
+ * value for minimum GPU clock frequency.
+ */
+#define JM_DEFAULT_JS_FREE_TIMEOUT_CYCLES (100000)
+
+#endif /* !MALI_USE_CSF */
+
+/* Timeout for polling the GPU PRFCNT_ACTIVE bit in clock cycles.
+ *
+ * Based on 120s timeout at 100MHz, based on original MAX_LOOPS value.
+ */
+#define KBASE_PRFCNT_ACTIVE_TIMEOUT_CYCLES (12000000000ull)
+
+/* Timeout for polling the GPU for a cache flush in clock cycles.
+ *
+ * Based on 120ms timeout at 100MHz, based on original MAX_LOOPS value.
+ */
+#define KBASE_CLEAN_CACHE_TIMEOUT_CYCLES (12000000ull)
+
+/* Timeout for polling the GPU for an AS command to complete in clock cycles.
+ *
+ * Based on 120s timeout at 100MHz, based on original MAX_LOOPS value.
+ */
+#define KBASE_AS_INACTIVE_TIMEOUT_CYCLES (12000000000ull)
 
 /* Default timeslice that a context is scheduled in for, in nanoseconds.
  *
@@ -249,7 +321,11 @@ enum {
  * is enabled the value will be read from there, otherwise this should be
  * overridden by defining GPU_FREQ_KHZ_MAX in the platform file.
  */
+#ifdef GPU_FREQ_KHZ_MAX
+#define DEFAULT_GPU_FREQ_KHZ_MAX GPU_FREQ_KHZ_MAX
+#else
 #define DEFAULT_GPU_FREQ_KHZ_MAX (5000)
+#endif /* GPU_FREQ_KHZ_MAX */
 
 /* Default timeout for task execution on an endpoint
  *
@@ -268,5 +344,18 @@ enum {
  */
 #define DEFAULT_IR_THRESHOLD (192)
 
-#endif /* _KBASE_CONFIG_DEFAULTS_H_ */
+/* Waiting time in clock cycles for the completion of a MMU operation.
+ *
+ * Ideally 1.6M GPU cycles required for the L2 cache (512KiB slice) flush.
+ *
+ * As a pessimistic value, 50M GPU cycles ( > 30 times bigger ) is chosen.
+ * It corresponds to 0.5s in GPU @ 100Mhz.
+ */
+#define MMU_AS_INACTIVE_WAIT_TIMEOUT_CYCLES ((u64)50 * 1024 * 1024)
 
+#if IS_ENABLED(CONFIG_MALI_TRACE_POWER_GPU_WORK_PERIOD)
+/* Default value of the time interval at which GPU metrics tracepoints are emitted. */
+#define DEFAULT_GPU_METRICS_TP_EMIT_INTERVAL_NS (500000000u) /* 500 ms */
+#endif
+
+#endif /* _KBASE_CONFIG_DEFAULTS_H_ */

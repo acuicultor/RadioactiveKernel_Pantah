@@ -533,8 +533,12 @@ static bool s6e3hc3_set_self_refresh(struct exynos_panel *ctx, bool enable)
 		return false;
 
 	/* self refresh is not supported in lp mode since that always makes use of early exit */
-	if (pmode->exynos_mode.is_lp_mode)
+	if (pmode->exynos_mode.is_lp_mode) {
+		/* set 10Hz while self refresh is active, otherwise clear it */
+		ctx->panel_idle_vrefresh = enable ? 10 : 0;
+		notify_panel_mode_changed(ctx, true);
 		return false;
+	}
 
 	idle_vrefresh = s6e3hc3_get_min_idle_vrefresh(ctx, pmode);
 
@@ -543,13 +547,17 @@ static bool s6e3hc3_set_self_refresh(struct exynos_panel *ctx, bool enable)
 		 * if idle mode is on inactivity, may need to update the target fps for auto mode,
 		 * or switch to manual mode if idle should be disabled (idle_vrefresh=0)
 		 */
-		if ((pmode->idle_mode == IDLE_MODE_ON_INACTIVITY) &&
-		    (spanel->auto_mode_vrefresh != idle_vrefresh)) {
-			dev_dbg(ctx->dev,
-				"early exit update needed for mode: %s (idle_vrefresh: %d)\n",
-				pmode->mode.name, idle_vrefresh);
-			s6e3hc3_update_refresh_mode(ctx, pmode, idle_vrefresh);
-			return true;
+		if (pmode->idle_mode == IDLE_MODE_ON_INACTIVITY) {
+			/* simply update idle vrefresh follow by self refresh */
+			ctx->panel_idle_vrefresh = enable ? idle_vrefresh : 0;
+			notify_panel_mode_changed(ctx, false);
+			if (spanel->auto_mode_vrefresh != idle_vrefresh) {
+				dev_dbg(ctx->dev,
+					"early exit update needed for mode: %s (idle_vrefresh: %d)\n",
+					pmode->mode.name, idle_vrefresh);
+				s6e3hc3_update_refresh_mode(ctx, pmode, idle_vrefresh);
+				return true;
+			}
 		}
 		return false;
 	}
@@ -585,7 +593,7 @@ static bool s6e3hc3_set_self_refresh(struct exynos_panel *ctx, bool enable)
 	}
 	EXYNOS_DCS_WRITE_TABLE(ctx, lock_cmd_f0);
 
-	backlight_state_changed(ctx->bl);
+	notify_panel_mode_changed(ctx, false);
 
 	DPU_ATRACE_END(__func__);
 
@@ -1099,6 +1107,14 @@ static const u32 s6e3hc3_bl_range[] = {
 	94, 180, 270, 360, 2047
 };
 
+static const int s6e3hc3_vrefresh_range[] = {
+	10, 30, 60, 120
+};
+
+static const int s6e3hc3_lp_vrefresh_range[] = {
+	10, 30
+};
+
 static const struct exynos_panel_mode s6e3hc3_modes[] = {
 	{
 		.mode = {
@@ -1437,9 +1453,13 @@ const struct exynos_panel_desc samsung_s6e3hc3 = {
 	.bl_num_ranges = ARRAY_SIZE(s6e3hc3_bl_range),
 	.modes = s6e3hc3_modes,
 	.num_modes = ARRAY_SIZE(s6e3hc3_modes),
+	.vrefresh_range = s6e3hc3_vrefresh_range,
+	.vrefresh_range_count = ARRAY_SIZE(s6e3hc3_vrefresh_range),
 	.lp_mode = s6e3hc3_lp_modes,
 	.lp_mode_count = ARRAY_SIZE(s6e3hc3_lp_modes),
 	.lp_cmd_set = &s6e3hc3_lp_cmd_set,
+	.lp_vrefresh_range = s6e3hc3_lp_vrefresh_range,
+	.lp_vrefresh_range_count = ARRAY_SIZE(s6e3hc3_lp_vrefresh_range),
 	.binned_lp = s6e3hc3_binned_lp,
 	.num_binned_lp = ARRAY_SIZE(s6e3hc3_binned_lp),
 	.is_panel_idle_supported = true,

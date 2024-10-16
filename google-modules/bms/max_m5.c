@@ -44,6 +44,8 @@
 #define MAX_M5_CRC8_POLYNOMIAL		0x07	/* (x^8) + x^2 + x + 1 */
 DECLARE_CRC8_TABLE(m5_crc8_table);
 
+int max_m5_recalibration(struct max_m5_data *m5_data, int algo, u16 cap);
+
 static void dump_model(struct device *dev, u16 *data, int count)
 {
 	int i, j, len;
@@ -146,7 +148,7 @@ static int max_m5_write_custom_model(struct regmap *regmap, u16 *model_data,
 				count * 2);
 }
 
-static int max_m5_model_lock(struct regmap *regmap, bool enabled)
+int max_m5_model_lock(struct regmap *regmap, bool enabled)
 {
 	u16 code[2] = {0x59, 0xC4};
 
@@ -376,8 +378,7 @@ int max_m5_model_read_version(const struct max_m5_data *m5_data)
 	return (version >> MODEL_VERSION_SHIFT) & MODEL_VERSION_MASK;
 }
 
-static int max_m5_model_write_version(const struct max_m5_data *m5_data,
-				      int version)
+int max_m5_model_write_version(const struct max_m5_data *m5_data, int version)
 {
 	u16 temp;
 	int ret;
@@ -419,7 +420,7 @@ int max_m5_reset_state_data(struct max_m5_data *m5_data)
 	if (ret < 0)
 		dev_warn(m5_data->dev, "Erase GMSR fail (%d)\n", ret);
 
-	return ret;
+	return ret == sizeof(data) ? 0 : ret;
 }
 
 int max_m5_needs_reset_model_data(const struct max_m5_data *m5_data)
@@ -455,40 +456,11 @@ static int max_m5_period2caplsb(u16 taskperiod)
 	return cap_lsb;
 }
 
-/* 0 is ok */
-int max_m5_load_gauge_model(struct max_m5_data *m5_data)
+static int max_m5_update_gauge_custom_parameters(struct max_m5_data *m5_data)
 {
 	struct max17x0x_regmap *regmap = m5_data->regmap;
 	int ret, retries;
 	u16 data;
-
-	if (!regmap)
-		return -EIO;
-
-	if (!m5_data || !m5_data->custom_model || !m5_data->custom_model_size)
-		return -ENODATA;
-
-	/* check FStat.DNR to wait it clear for data ready */
-	for (retries = 20; retries > 0; retries--) {
-		ret = REGMAP_READ(regmap, MAX_M5_FSTAT, &data);
-		if (ret == 0 && !(data & MAX_M5_FSTAT_DNR))
-			break;
-		msleep(50);
-	}
-	dev_info(m5_data->dev, "retries:%d, FSTAT:%#x\n", retries, data);
-
-	/* loading in progress, this is not good (tm) */
-	ret = REGMAP_READ(regmap, MAX_M5_CONFIG2, &data);
-	if (ret == 0 && (data & MAX_M5_CONFIG2_LDMDL)) {
-		dev_err(m5_data->dev, "load model in progress (%x)\n", data);
-		return -EINVAL;
-	}
-
-	ret = max_m5_update_custom_model(m5_data);
-	if (ret < 0) {
-		dev_err(m5_data->dev, "cannot update custom model (%d)\n", ret);
-		return ret;
-	}
 
 	/* write parameters (which include state) */
 	ret = max_m5_update_custom_parameters(m5_data);
@@ -546,24 +518,112 @@ int max_m5_load_gauge_model(struct max_m5_data *m5_data)
 
 		ret = REGMAP_READ(regmap, MAX_M5_CONFIG2, &data);
 		if (ret == 0 && !(data & MAX_M5_CONFIG2_LDMDL)) {
-			int temp;
+			ret = REGMAP_READ(regmap, MAX_M5_REPCAP, &data);
+			if (ret == 0 && data != 0) {
+				int temp;
 
-			temp = max_m5_model_read_version(m5_data);
-			if (m5_data->model_version == MAX_M5_INVALID_VERSION) {
-				dev_info(m5_data->dev, "No Model Version, Current %x\n",
-					 temp);
-			} else if (temp != m5_data->model_version) {
-				dev_info(m5_data->dev, "Model Version %x, Mismatch %x\n",
-					 m5_data->model_version, temp);
-				return -EINVAL;
+				temp = max_m5_model_read_version(m5_data);
+				if (m5_data->model_version == MAX_M5_INVALID_VERSION) {
+					dev_info(m5_data->dev, "No Model Version, Current %x\n",
+						 temp);
+				} else if (temp != m5_data->model_version) {
+					dev_info(m5_data->dev, "Model Version %x, Mismatch %x\n",
+						 m5_data->model_version, temp);
+					return -EINVAL;
+				}
+
+				return 0;
 			}
-
-			return 0;
 		}
-
 	}
 
 	return -ETIMEDOUT;
+}
+
+/* protected from mutex_lock(&chip->model_lock) */
+static int max_m5_check_model_parameters(struct max_m5_data *m5_data)
+{
+	struct max_m5_custom_parameters *cp = &m5_data->parameters;
+	struct max17x0x_regmap *regmap = m5_data->regmap;
+	int ret, cap_delta_threshold, cap_delta_real;
+	u16 fullcaprep, fullcapnom;
+
+	/* b/240115405#comment44 */
+	cap_delta_threshold = abs(cp->fullcapnom - cp->fullcaprep) + cp->designcap / 100;
+
+	ret = REGMAP_READ(regmap, MAX_M5_FULLCAPREP, &fullcaprep);
+	if (ret < 0)
+		return ret;
+
+	ret = REGMAP_READ(regmap, MAX_M5_FULLCAPNOM, &fullcapnom);
+	if (ret < 0)
+		return ret;
+
+	cap_delta_real = abs(fullcapnom - fullcaprep);
+
+	dev_info(m5_data->dev, "write: nom:%#x, rep:%#x, design:%#x (threshold=%d),"
+		 " read: nom:%#x, rep:%#x (delta=%d), retry:%d\n",
+		 cp->fullcapnom, cp->fullcaprep, cp->designcap, cap_delta_threshold,
+		 fullcapnom, fullcaprep, cap_delta_real, m5_data->load_retry);
+
+	if (cap_delta_real > cap_delta_threshold && m5_data->load_retry < MAX_M5_RETRY_TIMES)
+		return -ERANGE;
+
+	return 0;
+}
+
+/* 0 is ok , protected from mutex_lock(&chip->model_lock) in max7102x_battery.c */
+int max_m5_load_gauge_model(struct max_m5_data *m5_data)
+{
+	struct max17x0x_regmap *regmap = m5_data->regmap;
+	int ret, retries;
+	u16 data;
+
+	if (!regmap)
+		return -EIO;
+
+	if (!m5_data || !m5_data->custom_model || !m5_data->custom_model_size)
+		return -ENODATA;
+
+	/* check FStat.DNR to wait it clear for data ready */
+	for (retries = 20; retries > 0; retries--) {
+		ret = REGMAP_READ(regmap, MAX_M5_FSTAT, &data);
+		if (ret == 0 && !(data & MAX_M5_FSTAT_DNR))
+			break;
+		msleep(50);
+	}
+	dev_info(m5_data->dev, "retries:%d, FSTAT:%#x\n", retries, data);
+
+	/* loading in progress, this is not good (tm) */
+	ret = REGMAP_READ(regmap, MAX_M5_CONFIG2, &data);
+	if (ret == 0 && (data & MAX_M5_CONFIG2_LDMDL)) {
+		dev_err(m5_data->dev, "load model in progress (%x)\n", data);
+		return -EINVAL;
+	}
+
+	ret = max_m5_update_custom_model(m5_data);
+	if (ret < 0) {
+		dev_err(m5_data->dev, "cannot update custom model (%d)\n", ret);
+		return ret;
+	}
+
+	do {
+		msleep(500);
+
+		ret = max_m5_update_gauge_custom_parameters(m5_data);
+		if (ret < 0)
+			return ret;
+
+		ret = max_m5_check_model_parameters(m5_data);
+		if (ret < 0) {
+			m5_data->load_retry++;
+		} else {
+			m5_data->load_retry = 0;
+			break;
+		}
+	} while (m5_data->load_retry < MAX_M5_RETRY_TIMES);
+
+	return ret;
 }
 
 /* algo version is ignored here, check code in max1720x_outliers */
@@ -836,6 +896,11 @@ int max_m5_model_read_state(struct max_m5_data *m5_data)
 	return rc;
 }
 
+int max_m5_get_designcap(const struct max_m5_data *m5_data)
+{
+	return m5_data->parameters.designcap;
+}
+
 ssize_t max_m5_model_state_cstr(char *buf, int max,
 				struct max_m5_data *m5_data)
 {
@@ -1064,6 +1129,17 @@ int max_m5_fg_model_cstr(char *buf, int max, const struct max_m5_data *m5_data)
 	return len;
 }
 
+int max_m5_get_rc_switch_param(struct max_m5_data *m5_data, u16 *rc2_tempco, u16 *rc2_learncfg)
+{
+	if (m5_data->parameters.tempco <= 0 || m5_data->parameters.learncfg <= 0)
+		return -EINVAL;
+
+	*rc2_tempco = m5_data->parameters.tempco;
+	*rc2_learncfg = m5_data->parameters.learncfg;
+
+	return 0;
+}
+
 /* custom model parameters */
 int max_m5_fg_model_sscan(struct max_m5_data *m5_data, const char *buf, int max)
 {
@@ -1100,12 +1176,286 @@ int max_m5_fg_model_sscan(struct max_m5_data *m5_data, const char *buf, int max)
 	return 0;
 }
 
+static u16 max_m5_recal_dpacc(struct max_m5_data *m5_data)
+{
+	if (m5_data->parameters.taskperiod == MAX_M5_TASKPERIOD_351MS)
+		return 0x0c80;
+
+	return m5_data->parameters.dpacc;
+}
+
+static u16 max_m5_recal_dqacc(struct max_m5_data *m5_data, u16 target_cap)
+{
+	if (m5_data->parameters.taskperiod == MAX_M5_TASKPERIOD_351MS)
+		return target_cap >> 4;
+
+	return m5_data->parameters.dqacc;
+}
+
+static u16 max_m5_recal_new_cap(struct max_m5_data *m5_data, u16 dqacc, u16 dpacc)
+{
+	/*
+	 * dQacc LSb is 16mAh with 10mohm, *2 by 5mohm sense resistot, *2 by double task period
+	 * dPacc LSb is 0.0625% (1/16)
+	 * new capacity is dQacc/dPacc, took LSb in units into consideration:
+	 *       dQacc * 16 * 2 * 2                                                  dQacc
+	 *    ------------------------ * 100(%) / 2 (for write to fullcapnom/cap) = ------- x 51200
+	 *       dPacc * 0.0625                                                      dPacc
+	*/
+	if (m5_data->parameters.taskperiod == MAX_M5_TASKPERIOD_351MS)
+		return dqacc * 0xc800 / dpacc;
+
+	return m5_data->parameters.designcap;
+}
+
+static int max_m5_end_recal(struct max_m5_data *m5_data, int algo, u16 new_cap)
+{
+	struct max17x0x_regmap *regmap = m5_data->regmap;
+	int ret = 0;
+
+	if (algo == RE_CAL_ALGO_0)
+		return ret;
+
+	ret = max_m5_model_read_state(m5_data);
+	if (ret != 0)
+		return ret;
+
+	ret = max_m5_model_check_state(m5_data);
+	if (ret != 0)
+		return ret;
+
+	m5_data->parameters.fullcaprep = new_cap;
+	m5_data->parameters.fullcapnom = new_cap;
+	ret = max_m5_save_state_data(m5_data);
+	if (ret != 0)
+		return ret;
+
+	ret = max_m5_load_state_data(m5_data);
+	if (ret != 0)
+		return ret;
+
+	ret = REGMAP_WRITE(regmap, MAX_M5_COMMAND, MAX_M5_COMMAND_HARDWARE_RESET);
+
+	return ret;
+}
+
+static bool max_m5_needs_recal(struct max_m5_data *m5_data, u16 new_cap)
+{
+	u16 design_cap = m5_data->parameters.designcap;
+
+	if (new_cap > (design_cap * 110 / 100) &&
+	    m5_data->recal.rounds < MAX_M5_RECAL_MAX_ROUNDS)
+		return true;
+	return false;
+}
+
+static int max_m5_recal_release(struct max_m5_data *m5_data)
+{
+	struct max17x0x_regmap *regmap = m5_data->regmap;
+	u16 reg_cycle, data, dpacc, dqacc;
+	int ret = 0, retries = 0;
+
+	mutex_lock(&m5_data->recal.lock);
+	/* use designcap if not set bhi_target_capacity */
+	if (m5_data->recal.target_cap == 0)
+		m5_data->recal.target_cap = m5_data->parameters.designcap;
+
+	/* save current cycle before reset to 0 */
+	ret = REGMAP_READ(regmap, MAX_M5_CYCLES, &reg_cycle);
+	if (ret < 0)
+		goto error_done;
+
+	m5_data->recal.base_cycle_reg = reg_cycle;
+
+	/* set 200% dPacc/dQacc */
+	dpacc = max_m5_recal_dpacc(m5_data);
+	dqacc = max_m5_recal_dqacc(m5_data, m5_data->recal.target_cap);
+	do {
+		retries++;
+		ret = REGMAP_WRITE(regmap, MAX_M5_DPACC, dpacc);
+		if (ret == 0)
+			ret = REGMAP_WRITE(regmap, MAX_M5_DQACC, dqacc);
+		if (ret < 0) {
+			msleep(50);
+			continue;
+		}
+
+		break;
+	} while (ret < 0 && retries < 3);
+
+	if (ret < 0)
+		goto error_done;
+
+	/* set Cycle to 0 */
+	ret = REGMAP_WRITE(regmap, MAX_M5_CYCLES, 0x0);
+	if (ret < 0)
+		goto error_done;
+
+	/* Set LearnCfg: FCLrnStage=0x0, FCLrn=0x2 */
+	ret = REGMAP_READ(regmap, MAX_M5_LEARNCFG, &data);
+	if (ret < 0)
+		goto error_done;
+
+	data = MAX_M5_LEARNCFG_FCLRNSTAGE_CLR(data);
+	data = MAX_M5_LEARNCFG_FCLM_CLR(data) | (0x2 << MAX_M5_LEARNCFG_FCLM_SHIFT);
+	ret = REGMAP_WRITE_VERIFY(regmap, MAX_M5_LEARNCFG, data);
+	if (ret < 0)
+                goto error_done;
+
+	m5_data->recal.state = RE_CAL_STATE_LEARNING;
+
+error_done:
+        if (ret < 0)
+                dev_info(m5_data->dev, "unable to set RECAL data, ret=%d\n", ret);
+	mutex_unlock(&m5_data->recal.lock);
+	return ret;
+}
+
+/* b/291077564 */
+static int max_m5_recal_internal(struct max_m5_data *m5_data)
+{
+	struct max_m5_custom_parameters *cp = &m5_data->parameters;
+	struct max17x0x_regmap *regmap = m5_data->regmap;
+	u16 reg_cycle, learncfg;
+	int ret = 0;
+
+	mutex_lock(&m5_data->recal.lock);
+	/* save current cycle before reset to 0 */
+	ret = REGMAP_READ(regmap, MAX_M5_CYCLES, &reg_cycle);
+	if (ret < 0)
+		goto error_done;
+
+	m5_data->recal.base_cycle_reg = reg_cycle;
+
+	/* Clear GMSR */
+	ret = max_m5_reset_state_data(m5_data);
+	if (ret < 0)
+		goto error_done;
+
+	/* Set dPacc/dQacc to ther target capacity from 200% */
+	cp->dpacc = max_m5_recal_dpacc(m5_data);
+	cp->dqacc = max_m5_recal_dqacc(m5_data, cp->fullcapnom);
+
+	/* Set LearnCfg: FCLrnStage=0x0, FCLrn=0x2 */
+	learncfg = cp->learncfg;
+	learncfg = MAX_M5_LEARNCFG_FCLRNSTAGE_CLR(learncfg);
+	learncfg = MAX_M5_LEARNCFG_FCLM_CLR(learncfg) | (0x2 << MAX_M5_LEARNCFG_FCLM_SHIFT);
+	cp->learncfg = learncfg;
+
+	/* reset FG */
+	ret = REGMAP_WRITE(regmap, MAX_M5_COMMAND, MAX_M5_COMMAND_HARDWARE_RESET);
+	if (ret < 0)
+		goto error_done;
+
+	m5_data->recal.state = RE_CAL_STATE_FG_RESET;
+
+error_done:
+	mutex_unlock(&m5_data->recal.lock);
+	return ret;
+}
+
+int max_m5_check_recal_state(struct max_m5_data *m5_data, int algo, u16 eeprom_cycle)
+{
+	struct max17x0x_regmap *regmap = m5_data->regmap;
+	u16 learncfg, status, reg_cycle, dqacc, dpacc, new_cap;
+	int ret;
+
+	if (m5_data->recal.state == RE_CAL_STATE_IDLE)
+		return 0;
+
+	if (m5_data->recal.state == RE_CAL_STATE_FG_RESET) {
+		ret = REGMAP_READ(regmap, MAX_M5_STATUS, &status);
+		if (ret < 0)
+			return ret;
+		if ((status & MAX_M5_STATUS_POR) == 0)
+			m5_data->recal.state = RE_CAL_STATE_LEARNING;
+	}
+
+	/* check learncfg for recalibration status */
+	ret = REGMAP_READ(regmap, MAX_M5_LEARNCFG, &learncfg);
+	if (ret < 0)
+		return ret;
+
+	/* under learning progress */
+	if ((learncfg & MAX_M5_LEARNCFG_FCLRNSTAGE) != MAX_M5_LEARNCFG_FCLRNSTAGE)
+		return 0;
+
+	if ((learncfg & MAX_M5_LEARNCFG_RC_VER) != MAX_M5_LEARNCFG_RC2)
+		return 0;
+
+	/* restore real cycle */
+	reg_cycle = eeprom_cycle << 1;
+	ret = REGMAP_WRITE(regmap, MAX_M5_CYCLES, reg_cycle);
+	if (ret < 0)
+		return ret;
+
+	m5_data->recal.base_cycle_reg = 0;
+
+	/* Check learning capacity */
+	ret = REGMAP_READ(regmap, MAX_M5_DQACC, &dqacc);
+	if (ret < 0)
+		return ret;
+
+	ret = REGMAP_READ(regmap, MAX_M5_DPACC, &dpacc);
+	if (ret < 0)
+		return ret;
+
+	new_cap = max_m5_recal_new_cap(m5_data, dqacc, dpacc);
+
+	if (max_m5_needs_recal(m5_data, new_cap)) {
+		ret = max_m5_recalibration(m5_data, algo, m5_data->recal.target_cap);
+		return ret;
+	}
+
+	ret = max_m5_end_recal(m5_data, algo, new_cap);
+	if (ret < 0)
+		dev_warn(m5_data->dev, "fail to restore new capacity, ret=%d\n", ret);
+
+	m5_data->recal.state = RE_CAL_STATE_IDLE;
+
+	return ret;
+}
+
+int max_m5_recalibration(struct max_m5_data *m5_data, int algo, u16 cap)
+{
+	int ret = 0;
+
+	if (!m5_data)
+		return -EINVAL;
+
+	if (m5_data->recal.rounds >= MAX_M5_RECAL_MAX_ROUNDS)
+		return ret;
+
+	m5_data->recal.target_cap = cap;
+
+	/* TODO: add maximum recalibration times */
+	if (algo == RE_CAL_ALGO_0)
+		ret = max_m5_recal_release(m5_data);
+	else if (algo == RE_CAL_ALGO_1)
+		ret = max_m5_recal_internal(m5_data);
+
+	if (ret == 0)
+		m5_data->recal.rounds++;
+
+	return ret;
+}
+
+int max_m5_recal_state(const struct max_m5_data *m5_data)
+{
+	return m5_data->recal.state;
+}
+
+int max_m5_recal_cycle(const struct max_m5_data *m5_data)
+{
+	return m5_data->recal.base_cycle_reg;
+}
+
 /* Initial values??? */
 #define CGAIN_RESET_VAL 0x0400
-static int m5_init_custom_parameters(struct device *dev,
-				     struct max_m5_custom_parameters *cp,
-				     struct device_node *node)
+int m5_init_custom_parameters(struct device *dev, struct max_m5_data *m5_data,
+			      struct device_node *node)
 {
+	struct max_m5_custom_parameters *cp = &m5_data->parameters;
 	const char *propname = "maxim,fg-params";
 	const int cnt_default = sizeof(*cp) / 2 - 1;
 	const int cnt_w_cgain = sizeof(*cp) / 2;
@@ -1134,9 +1484,9 @@ static int m5_init_custom_parameters(struct device *dev,
 	return 0;
 }
 
-void max_m5_free_data(void *data)
+void max_m5_free_data(struct max_m5_data *m5_data)
 {
-
+	devm_kfree(m5_data->dev, m5_data);
 }
 
 void *max_m5_init_data(struct device *dev, struct device_node *node,
@@ -1185,7 +1535,7 @@ void *max_m5_init_data(struct device *dev, struct device_node *node,
 	 * Initial values: check max_m5_model_read_state() for the registers
 	 * updated from max1720x_model_work()
 	 */
-	ret = m5_init_custom_parameters(dev, &m5_data->parameters, node);
+	ret = m5_init_custom_parameters(dev, m5_data, node);
 	if (ret < 0)
 		dev_err(dev, "fg-params: %s not found\n", propname);
 
@@ -1219,6 +1569,8 @@ static bool max_m5_is_reg(struct device *dev, unsigned int reg)
 	case 0x80 ... 0xAF:	/* FG Model */
 		/* TODO: add a check on unlock */
 		return true;
+	case 0xEB:              /* CoTrim */
+		return true;
 	}
 
 	return false;
@@ -1241,6 +1593,22 @@ const struct max17x0x_reg max_m5[] = {
 	[MAX17X0X_TAG_curr] = { ATOM_INIT_REG16(MAX_M5_CURRENT)},
 	[MAX17X0X_TAG_mcap] = { ATOM_INIT_REG16(MAX_M5_MIXCAP)},
 	[MAX17X0X_TAG_vfsoc] = { ATOM_INIT_REG16(MAX_M5_VFSOC)},
+
+	[MAXFG_TAG_tempco] = { ATOM_INIT_REG16(MAX_M5_TEMPCO)},
+	[MAXFG_TAG_rcomp0] = { ATOM_INIT_REG16(MAX_M5_RCOMP0)},
+	[MAXFG_TAG_fcnom] = { ATOM_INIT_REG16(MAX_M5_FULLCAPNOM)},
+	[MAXFG_TAG_fcrep] = { ATOM_INIT_REG16(MAX_M5_FULLCAPREP)},
+	[MAXFG_TAG_repsoc] = { ATOM_INIT_REG16(MAX_M5_REPSOC)},
+	[MAXFG_TAG_msoc] = { ATOM_INIT_REG16(MAX_M5_MIXSOC)},
+	[MAXFG_TAG_learn] = { ATOM_INIT_REG16(MAX_M5_LEARNCFG)},
+	[MAXFG_TAG_fstat] = { ATOM_INIT_REG16(MAX_M5_FSTAT)},
+	[MAXFG_TAG_dqacc] = { ATOM_INIT_REG16(MAX_M5_DQACC)},
+	[MAXFG_TAG_dpacc] = { ATOM_INIT_REG16(MAX_M5_DPACC)},
+	[MAXFG_TAG_avgt] = { ATOM_INIT_REG16(MAX_M5_AVGTA)},
+	[MAXFG_TAG_avgv] = { ATOM_INIT_REG16(MAX_M5_AVGVCELL)},
+	[MAXFG_TAG_vfocv] = { ATOM_INIT_REG16(MAX_M5_VFOCV)},
+	[MAXFG_TAG_qh] = { ATOM_INIT_REG16(MAX_M5_QH)},
+	[MAXFG_TAG_vcel] = { ATOM_INIT_REG16(MAX_M5_VCELL)},
 };
 
 int max_m5_regmap_init(struct max17x0x_regmap *regmap, struct i2c_client *clnt)

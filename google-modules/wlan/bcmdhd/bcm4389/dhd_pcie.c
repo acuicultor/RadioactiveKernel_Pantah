@@ -9314,8 +9314,8 @@ dhdpcie_bus_suspend(struct dhd_bus *bus, bool state, bool byint)
 dhdpcie_bus_suspend(struct dhd_bus *bus, bool state)
 #endif /* DHD_PCIE_NATIVE_RUNTIMEPM */
 {
-	int timeleft;
-	int rc = 0;
+	int timeleft = 0;
+	int rc = 0, ret = BCME_OK;
 	unsigned long flags;
 #ifdef DHD_PCIE_NATIVE_RUNTIMEPM
 	int d3_read_retry = 0;
@@ -9469,17 +9469,19 @@ dhdpcie_bus_suspend(struct dhd_bus *bus, bool state)
 #ifdef PCIE_INB_DW
 		if (INBAND_DW_ENAB(bus)) {
 			DHD_BUS_INB_DW_LOCK(bus->inb_lock, flags);
-			dhdpcie_send_mb_data(bus, H2D_HOST_D3_INFORM);
+			ret = dhdpcie_send_mb_data(bus, H2D_HOST_D3_INFORM);
 			DHD_BUS_INB_DW_UNLOCK(bus->inb_lock, flags);
 		} else
 #endif /* PCIE_INB_DW */
 		{
-			dhdpcie_send_mb_data(bus, H2D_HOST_D3_INFORM);
+			ret = dhdpcie_send_mb_data(bus, H2D_HOST_D3_INFORM);
 		}
 
-		/* Wait for D3 ACK for D3_ACK_RESP_TIMEOUT seconds */
+		if (!bus->is_linkdown && ret == BCME_OK) {
+			/* Wait for D3 ACK for D3_ACK_RESP_TIMEOUT seconds */
+			timeleft = dhd_os_d3ack_wait(bus->dhd, &bus->wait_for_d3_ack);
+		}
 
-		timeleft = dhd_os_d3ack_wait(bus->dhd, &bus->wait_for_d3_ack);
 #ifdef DHD_RECOVER_TIMEOUT
 		/* XXX: WAR for missing D3 ACK MB interrupt */
 		if (bus->wait_for_d3_ack == 0) {
@@ -13397,7 +13399,7 @@ dhdpci_bus_read_frames(dhd_bus_t *bus)
 		DHD_RPM(("%s: Bus is in power save state (%d). "
 			"Skip processing rest of ring buffers.\n",
 			__FUNCTION__, bus->bus_low_power_state));
-		return FALSE;
+		return more;
 	}
 
 	/* update the flow ring cpls */
