@@ -80,8 +80,6 @@ static void bts_calc_bw(void)
 	unsigned int rt_bw = 0;
 	unsigned int mif_freq, int_freq, bus1_freq;
 
-	mutex_lock(&btsdev->mutex_lock);
-
 	btsdev->peak_bw = 0;
 	btsdev->total_bw = 0;
 
@@ -125,7 +123,6 @@ static void bts_calc_bw(void)
 	pm_qos_update_request(&exynos_mif_qos, mif_freq);
 	pm_qos_update_request(&exynos_int_qos, int_freq);
 #endif
-	mutex_unlock(&btsdev->mutex_lock);
 }
 
 static void bts_update_stats(unsigned int index)
@@ -309,13 +306,12 @@ int bts_update_bw(unsigned int index, struct bts_bw bw)
 		goto err;
 	}
 
-	spin_lock(&btsdev->lock);
+	mutex_lock(&btsdev->mutex_lock);
 	bts_bw[index].peak = bw.peak;
 	bts_bw[index].read = bw.read;
 	bts_bw[index].write = bw.write;
 	if (bts_bw[index].is_rt)
 		bts_bw[index].rt = bw.rt;
-	spin_unlock(&btsdev->lock);
 
 	if(trace_clock_set_rate_enabled()) {
 		scnprintf(trace_name, sizeof(trace_name), "BTS_%s_rd_bw", bts_bw[index].name);
@@ -334,6 +330,7 @@ int bts_update_bw(unsigned int index, struct bts_bw bw)
 
 	bts_calc_bw();
 	bts_update_stats(index);
+	mutex_unlock(&btsdev->mutex_lock);
 
 	return 0;
 
