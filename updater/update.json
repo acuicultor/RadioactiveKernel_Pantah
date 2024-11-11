@@ -1,11 +1,11 @@
 {
   "kernel": {
     "name": "Radioactive Kernel Pantah",
-    "version": "v3.0.2",
-    "link": "https://github.com/acuicultor/RadioactiveKernel_Pantah/releases/download/v3.0.2/RadioactiveKernel_PANTAH_v3.0.2.zip",
+    "version": "v3.0.4",
+    "link": "https://github.com/acuicultor/RadioactiveKernel_Pantah/releases/download/v3.0.4/RadioactiveKernel_PANTAH_v3.0.4.zip",
     "changelog_url": "https://raw.githubusercontent.com/acuicultor/RadioactiveKernel_Pantah/A15-stable/updater/changelog.txt",
-    "date": "24-10-2024",
-    "sha1": "4b8347cb5c5e5fed88bce1a950612170a8b50b23"
+    "date": "11-11-2024",
+    "sha1": "b4288ba48add5e7dec5a6af8a679b2d548d75549"
   },
   "support": {
     "link": "https://forum.xda-developers.com/t/kernel-radioactive-kernel-v1-0-0-a13-stable-2023-01-19-unified-pixel7-pixel7pro.4543551/"           
