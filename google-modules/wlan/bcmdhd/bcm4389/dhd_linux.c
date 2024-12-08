@@ -19099,6 +19099,7 @@ dhd_mem_dump(void *handle, void *event_info, u8 event)
 	char lr_fn[DHD_FUNC_STR_LEN] = "\0";
 	trap_t *tr;
 	bool collect_coredump = FALSE;
+	char trap_str[DHD_TRAP_STR_LEN] = {0};
 #endif /* DHD_COREDUMP */
 	uint32 memdump_type;
 
@@ -19212,22 +19213,26 @@ dhd_mem_dump(void *handle, void *event_info, u8 event)
 	dhd_convert_memdump_type_to_str(memdump_type, dhdp->memdump_str,
 		DHD_MEMDUMP_LONGSTR_LEN, dhdp->debug_dump_subcmd);
 
+	if (dhdp->dongle_trap_occured) {
+		tr = &dhdp->last_trap_info;
+		dhd_lookup_map(dhdp->osh, map_path,
+			ltoh32(tr->epc), pc_fn, ltoh32(tr->r14), lr_fn);
+		snprintf(trap_str, DHD_TRAP_STR_LEN, "_%.79s_%.79s", pc_fn, lr_fn);
+	}
+
 	if (memdump_type == DUMP_TYPE_DONGLE_TRAP &&
 		dhdp->dongle_trap_occured == TRUE) {
 		if (!dhdp->dsack_hc_due_to_isr_delay &&
 				!dhdp->dsack_hc_due_to_dpc_delay) {
-			tr = &dhdp->last_trap_info;
-			dhd_lookup_map(dhdp->osh, map_path,
-					ltoh32(tr->epc), pc_fn, ltoh32(tr->r14), lr_fn);
 			sprintf(&dhdp->memdump_str[strlen(dhdp->memdump_str)],
-				"_%.79s_%.79s", pc_fn, lr_fn);
+				"%s", trap_str);
 		}
 	}
 	DHD_ERROR(("%s: dump reason: %s\n", __FUNCTION__, dhdp->memdump_str));
 
 #ifdef DHD_SSSR_COREDUMP
-	if (dhd_is_coredump_reqd(dhdp->memdump_str,
-		strnlen(dhdp->memdump_str, DHD_MEMDUMP_LONGSTR_LEN))) {
+	if (dhd_is_coredump_reqd(trap_str,
+		strnlen(trap_str, DHD_TRAP_STR_LEN))) {
 		ret = dhd_collect_coredump(dhdp, dump);
 		if (ret == BCME_ERROR) {
 			DHD_ERROR(("%s: dhd_collect_coredump() failed.\n",

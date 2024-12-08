@@ -10395,7 +10395,7 @@ wl_cfgvendor_tx_power_scenario(struct wiphy *wiphy,
 				break;
 			default:
 				WL_ERR(("SAR: invalid wifi tx power scenario = %d\n",
-					sar_tx_power_val));
+					wifi_tx_power_mode));
 				err = -EINVAL;
 				goto exit;
 		}

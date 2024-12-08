@@ -382,8 +382,8 @@ typedef struct rtt_report {
 	* 2-sided RTT: TX rate of FTM frame coming from responder.
 	*/
 	wifi_rate_v1 rx_rate;
-	wifi_timespan rtt;	/*  round trip time in 0.1 nanoseconds */
-	wifi_timespan rtt_sd;	/* rtt standard deviation in 0.1 nanoseconds */
+	wifi_timespan rtt;	/*  round trip time in picoseconds */
+	wifi_timespan rtt_sd;	/* rtt standard deviation in picoseconds */
 	wifi_timespan rtt_spread; /* difference between max and min rtt times recorded */
 	int distance; /* distance in cm (optional) */
 	int distance_sd; /* standard deviation in cm (optional) */

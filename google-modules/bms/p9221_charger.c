@@ -4808,6 +4808,47 @@ static ssize_t fw_rev_show(struct device *dev,
 
 static DEVICE_ATTR_RO(fw_rev);
 
+static ssize_t fan_level_show(struct device *dev,
+			      struct device_attribute *attr,
+			      char *buf)
+{
+	struct i2c_client *client = to_i2c_client(dev);
+	struct p9221_charger_data *charger = i2c_get_clientdata(client);
+	int result = 0;
+
+	if (charger->fan_level_votable)
+		result = gvotable_get_current_int_vote(charger->fan_level_votable);
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n", result);
+}
+
+static ssize_t fan_level_store(struct device *dev,
+			       struct device_attribute *attr,
+			       const char *buf, size_t count)
+{
+	struct i2c_client *client = to_i2c_client(dev);
+	struct p9221_charger_data *charger = i2c_get_clientdata(client);
+	int ret = 0;
+	int level;
+
+	ret = kstrtoint(buf, 0, &level);
+	if (ret < 0)
+		return ret;
+
+	if ((level < FAN_LVL_UNKNOWN) || (level > FAN_LVL_ALARM))
+		return -ERANGE;
+
+	if (charger->fan_level_votable) {
+		ret = gvotable_cast_int_vote(charger->fan_level_votable, "MSC_USR", level, true);
+		if (ret < 0)
+			pr_err("MSC_FAN_LVL: fail to set level=%d(ret=%d)\n", level, ret);
+	}
+
+	return count;
+}
+
+static DEVICE_ATTR_RW(fan_level);
+
 static ssize_t p9382_show_rtx_boost(struct device *dev,
 				    struct device_attribute *attr,
 				    char *buf)
@@ -5347,6 +5388,7 @@ static struct attribute *p9221_attributes[] = {
 	&dev_attr_mitigate_threshold.attr,
 	&dev_attr_wpc_ready.attr,
 	&dev_attr_qien.attr,
+	&dev_attr_fan_level.attr,
 	NULL
 };
 
@@ -6799,6 +6841,31 @@ static int p9221_wlc_disable_callback(struct gvotable_election *el,
 	return 0;
 }
 
+static int fan_level_cb(struct gvotable_election *el,
+			const char *reason, void *vote)
+{
+	struct p9221_charger_data *charger = gvotable_get_data(el);
+	int lvl = GVOTABLE_PTR_TO_INT(vote);
+
+	if (!charger)
+		return 0;
+
+	if (charger->fan_last_level == lvl)
+		return 0;
+
+	if (!charger->online)
+		return 0;
+
+	logbuffer_log(charger->log, "FAN_LEVEL %d->%d reason=%s",
+		      charger->fan_last_level, lvl, reason ? reason : "<>");
+
+	charger->fan_last_level = lvl;
+
+	kobject_uevent(&charger->dev->kobj, KOBJ_CHANGE);
+
+	return 0;
+}
+
 /*
  *  If able to read the chip_id register then we know we are online
  *
@@ -7074,6 +7141,24 @@ static int p9221_charger_probe(struct i2c_client *client,
 		gvotable_election_get_handle(GBMS_MODE_VOTABLE);
 	if (!charger->chg_mode_votable)
 		dev_warn(&charger->client->dev, "Could not find %s votable\n", GBMS_MODE_VOTABLE);
+
+	charger->fan_level_votable =
+		gvotable_create_int_election(NULL, gvotable_comparator_int_max,
+					     fan_level_cb, charger);
+	if (IS_ERR_OR_NULL(charger->fan_level_votable)) {
+		ret = PTR_ERR(charger->fan_level_votable);
+		dev_err(&client->dev, "Fail to create fan_level_votable\n");
+		charger->fan_level_votable = NULL;
+	} else {
+		gvotable_set_vote2str(charger->fan_level_votable,
+				      gvotable_v2s_int);
+		gvotable_election_set_name(charger->fan_level_votable,
+					   VOTABLE_FAN_LEVEL);
+		gvotable_cast_long_vote(charger->fan_level_votable,
+					"DEFAULT", FAN_LVL_UNKNOWN, true);
+	}
+
+	charger->fan_last_level = -1;
 
 	/* Ramping on BPP is optional */
 	if (charger->pdata->icl_ramp_delay_ms != -1) {

@@ -32,6 +32,10 @@
 #define GXP_USE_LEGACY_MAILBOX 0
 #endif
 
+#ifndef GXP_ENABLE_PARTIAL_LAP
+#define GXP_ENABLE_PARTIAL_LAP 0
+#endif
+
 #ifndef GXP_HAS_LAP
 #define GXP_HAS_LAP 1
 #endif

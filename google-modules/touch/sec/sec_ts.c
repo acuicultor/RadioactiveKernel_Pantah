@@ -2044,6 +2044,16 @@ static void sec_ts_handle_coord_event(struct sec_ts_data *ts,
 
 		ts->coord[t_id].left_event = p_event_coord->left_event;
 
+		if (ts->coord[t_id].x > ts->plat_data->max_x) {
+			input_info(true, &ts->client->dev,
+				"%s: unexpected FW x-coord(%u)!\n", __func__, ts->coord[t_id].x);
+			ts->coord[t_id].x = ts->plat_data->max_x;
+		}
+		if (ts->coord[t_id].y > ts->plat_data->max_y) {
+			input_info(true, &ts->client->dev,
+				"%s: unexpected FW y-coord(%u)!\n", __func__, ts->coord[t_id].y);
+			ts->coord[t_id].y = ts->plat_data->max_y;
+		}
 		if (ts->coord[t_id].z <= 0)
 			ts->coord[t_id].z = 1;
 

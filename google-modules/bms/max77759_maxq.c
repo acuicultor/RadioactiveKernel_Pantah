@@ -67,8 +67,10 @@
 #define RSBM_ADDR				0
 #define RSBR_ADDR				4
 #define SUFG_ADDR				8
+#define RSOC_ADDR				10
 #define RS_TAG_LENGTH				4
 #define SU_TAG_LENGTH				1
+#define RSOC_TAG_LENGTH				2
 #define RS_TAG_OFFSET_ADDR			0
 #define RS_TAG_OFFSET_LENGTH			1
 #define RS_TAG_OFFSET_DATA			2
@@ -328,6 +330,9 @@ static int maxq_rs_read(struct max77759_maxq *maxq, gbms_tag_t tag, u8 *data)
 	} else if (tag == GBMS_TAG_SUFG) {
 		buff[RS_TAG_OFFSET_ADDR] = SUFG_ADDR;
 		len = SU_TAG_LENGTH;
+	} else if (tag == GBMS_TAG_RSOC) {
+		buff[RS_TAG_OFFSET_ADDR] = RSOC_ADDR;
+		len = RSOC_TAG_LENGTH;
 	} else {
 		return -EINVAL;
 	}
@@ -357,6 +362,9 @@ static int maxq_rs_write(struct max77759_maxq *maxq, gbms_tag_t tag, u8 *data)
 	} else if (tag == GBMS_TAG_SUFG) {
 		buff[RS_TAG_OFFSET_ADDR] = SUFG_ADDR;
 		len = SU_TAG_LENGTH;
+	} else if (tag == GBMS_TAG_RSOC) {
+		buff[RS_TAG_OFFSET_ADDR] = RSOC_ADDR;
+		len = RSOC_TAG_LENGTH;
 	} else {
 		return -EINVAL;
 	}
@@ -393,6 +401,11 @@ static int maxq_storage_read(gbms_tag_t tag, void *buff, size_t size,
 			return -EINVAL;
 		ret = maxq_rs_read(maxq, tag, buff);
 		break;
+	case GBMS_TAG_RSOC:
+		if (size && size > RSOC_TAG_LENGTH)
+			return -EINVAL;
+		ret = maxq_rs_read(maxq, tag, buff);
+		break;
 	default:
 		ret = -ENOENT;
 		break;
@@ -421,6 +434,11 @@ static int maxq_storage_write(gbms_tag_t tag, const void *buff, size_t size,
 		break;
 	case GBMS_TAG_SUFG:
 		if (size && size > SU_TAG_LENGTH)
+			return -EINVAL;
+		ret = maxq_rs_write(maxq, tag, (void *)buff);
+		break;
+	case GBMS_TAG_RSOC:
+		if (size && size > RSOC_TAG_LENGTH)
 			return -EINVAL;
 		ret = maxq_rs_write(maxq, tag, (void *)buff);
 		break;

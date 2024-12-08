@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 /*
  *
- * (C) COPYRIGHT 2023-2024 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2024 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -19,19 +19,19 @@
  *
  */
 
-#ifndef _KUTF_KPROBE_H_
-#define _KUTF_KPROBE_H_
+#ifndef _MALI_KBASE_MMU_FAULTS_DECODER_LUTS_JM_H_
+#define _MALI_KBASE_MMU_FAULTS_DECODER_LUTS_JM_H_
+#include <linux/types.h>
 
-struct dentry;
+/**
+ * decode_fault_source_jm_t() - Get internal requester of a
+ * fault in a human readable format.
+ *
+ * @idx: Internal requester part of SOURCE_ID field of the fault.
+ * @gpu_id: GPU id composed of arch_major << 16 | arch_minor << 8 | arch_rev.
+ *
+ * Return: Internal requester of a fault in a human readable format for a JM core.
+ */
+const char *decode_fault_source_jm_t(u16 idx, u32 gpu_id);
 
-int kutf_kprobe_init(struct dentry *base_dir);
-void kutf_kprobe_exit(void);
-
-typedef void (*kutf_kp_handler)(int argc, char **argv);
-
-void kutf_kp_sample_handler(int argc, char **argv);
-void kutf_kp_sample_kernel_function(void);
-
-void kutf_kp_delay_handler(int argc, char **argv);
-
-#endif /* _KUTF_KPROBE_H_ */
+#endif /* _MALI_KBASE_MMU_FAULTS_DECODER_LUTS_JM_H_ */

@@ -3384,7 +3384,7 @@ dhd_dbg_detach(dhd_pub_t *dhdp)
 		}
 	}
 
-	VMFREE(dhdp->osh, dbg, sizeof(dhd_dbg_t));
+	VMFREE(dhdp->osh, dhdp->dbg, sizeof(dhd_dbg_t));
 #endif /* DHD_DEBUGABILITY_LOG_DUMP_RING || BTLOG ||
 	* DHD_DEBUGABILITY_EVENT_RING || DHD_PKT_LOGGING_DBGRING ||
 	* (DEBUGABILITY && CUSTOMER_HW6)

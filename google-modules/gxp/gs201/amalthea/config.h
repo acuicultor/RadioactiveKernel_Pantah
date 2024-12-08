@@ -28,6 +28,9 @@
 
 #define GXP_USE_LEGACY_MAILBOX 1
 
+/* Enable a partial LAP workaround for sync barrier access only. */
+#define GXP_ENABLE_PARTIAL_LAP 1
+
 #define GXP_HAS_MCU 0
 
 #include "config-pwr-state.h"

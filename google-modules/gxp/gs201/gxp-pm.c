@@ -210,6 +210,28 @@ out:
 	mutex_unlock(&set_acpm_state_work->gxp->power_mgr->pm_lock);
 }
 
+#if GXP_ENABLE_PARTIAL_LAP
+/*
+ * Manually enables partial Local Access Path (LAP) support on platforms where
+ * it's not enabled by default.
+ *
+ * Note: Since the function requires access to the block CSRs, AUR BLK needs to
+ * be already on before calling this function.
+ */
+static void gxp_enable_partial_lap(struct gxp_dev *gxp)
+{
+	u32 val;
+
+	/*
+	 * Enable CNOC to DNOC path in Provino for direct TOP access from Q7
+	 * cores.
+	 */
+	val = gxp_read_32(gxp, FABRIC_IXBAR1_ARL_CTRL_OFFSET);
+	val |= FABRIC_IXBAR1_ARL_CTRL_EN;
+	gxp_write_32(gxp, FABRIC_IXBAR1_ARL_CTRL_OFFSET, val);
+}
+#endif /* GXP_ENABLE_PARTIAL_LAP */
+
 #define AUR_DVFS_DEBUG_REQ BIT(31)
 #define AUR_DEBUG_CORE_FREQ (AUR_DVFS_DEBUG_REQ | (3 << 27))
 
@@ -235,6 +257,14 @@ int gxp_pm_blk_on(struct gxp_dev *gxp)
 	gxp_iommu_setup_shareability(gxp);
 	/* Startup TOP's PSM */
 	gxp_lpm_init(gxp);
+
+#if GXP_ENABLE_PARTIAL_LAP
+	/*
+	 * Enable core local access path where applicable.
+	 * Called here since it can only be called after the block is turned on.
+	 */
+	gxp_enable_partial_lap(gxp);
+#endif /* GXP_ENABLE_PARTIAL_LAP */
 	gxp->power_mgr->blk_switch_count++;
 out:
 	mutex_unlock(&gxp->power_mgr->pm_lock);

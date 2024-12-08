@@ -371,6 +371,9 @@ int max_m5_model_read_version(const struct max_m5_data *m5_data)
 	u16 version;
 	int ret;
 
+	if (!m5_data)
+		return -EINVAL;
+
 	ret = REGMAP_READ(m5_data->regmap, MODEL_VERSION_REG, &version);
 	if (ret < 0)
 		return ret;
@@ -382,6 +385,9 @@ int max_m5_model_write_version(const struct max_m5_data *m5_data, int version)
 {
 	u16 temp;
 	int ret;
+
+	if (!m5_data)
+		return -EINVAL;
 
 	if (version == MAX_M5_INVALID_VERSION)
 		return 0;
@@ -414,6 +420,9 @@ int max_m5_reset_state_data(struct max_m5_data *m5_data)
 	struct model_state_save data;
 	int ret = 0;
 
+	if (!m5_data)
+		return -EINVAL;
+
 	memset(&data, 0xff, sizeof(data));
 
 	ret = gbms_storage_write(GBMS_TAG_GMSR, &data, sizeof(data));
@@ -426,6 +435,9 @@ int max_m5_reset_state_data(struct max_m5_data *m5_data)
 int max_m5_needs_reset_model_data(const struct max_m5_data *m5_data)
 {
 	int read_rc, para_rc;
+
+	if (!m5_data)
+		return 0;
 
 	if (m5_data->force_reset_model_data)
 		return 1;
@@ -459,7 +471,7 @@ static int max_m5_period2caplsb(u16 taskperiod)
 static int max_m5_update_gauge_custom_parameters(struct max_m5_data *m5_data)
 {
 	struct max17x0x_regmap *regmap = m5_data->regmap;
-	int ret, retries;
+	int ret, retries, temp;
 	u16 data;
 
 	/* write parameters (which include state) */
@@ -491,16 +503,6 @@ static int max_m5_update_gauge_custom_parameters(struct max_m5_data *m5_data)
 
 	m5_data->cap_lsb = max_m5_period2caplsb(m5_data->parameters.taskperiod);
 
-	/*
-	 * version could be in the DT: this will overwrite it if set.
-	 * Invalid version is not written out.
-	 */
-	ret = max_m5_model_write_version(m5_data, m5_data->model_version);
-	if (ret < 0) {
-		dev_err(m5_data->dev, "cannot update version (%d)\n", ret);
-		return ret;
-	}
-
 	/* trigger load model */
 	ret = REGMAP_READ(regmap, MAX_M5_CONFIG2, &data);
 	if (ret == 0)
@@ -519,25 +521,37 @@ static int max_m5_update_gauge_custom_parameters(struct max_m5_data *m5_data)
 		ret = REGMAP_READ(regmap, MAX_M5_CONFIG2, &data);
 		if (ret == 0 && !(data & MAX_M5_CONFIG2_LDMDL)) {
 			ret = REGMAP_READ(regmap, MAX_M5_REPCAP, &data);
-			if (ret == 0 && data != 0) {
-				int temp;
-
-				temp = max_m5_model_read_version(m5_data);
-				if (m5_data->model_version == MAX_M5_INVALID_VERSION) {
-					dev_info(m5_data->dev, "No Model Version, Current %x\n",
-						 temp);
-				} else if (temp != m5_data->model_version) {
-					dev_info(m5_data->dev, "Model Version %x, Mismatch %x\n",
-						 m5_data->model_version, temp);
-					return -EINVAL;
-				}
-
-				return 0;
-			}
+			if (ret == 0 && data != 0)
+				break;
 		}
 	}
 
-	return -ETIMEDOUT;
+	if (retries == 0)
+		return -ETIMEDOUT;
+
+	/*
+	 * version could be in the DT: this will overwrite it if set.
+	 * Invalid version is not written out.
+	 */
+	ret = max_m5_model_write_version(m5_data, m5_data->model_version);
+	if (ret < 0) {
+		dev_err(m5_data->dev, "cannot update version (%d)\n", ret);
+		return ret;
+	}
+
+	temp = max_m5_model_read_version(m5_data);
+	if (m5_data->model_version == MAX_M5_INVALID_VERSION) {
+		dev_info(m5_data->dev, "No Model Version, Current %x\n", temp);
+		return -EINVAL;
+	}
+
+	if (temp != m5_data->model_version) {
+		dev_info(m5_data->dev, "Model Version %x, Mismatch %x\n",
+			 m5_data->model_version, temp);
+		return -EINVAL;
+	}
+
+	return 0;
 }
 
 /* protected from mutex_lock(&chip->model_lock) */
@@ -630,6 +644,9 @@ int max_m5_load_gauge_model(struct max_m5_data *m5_data)
 int max_m5_fixup_outliers(struct max1720x_drift_data *ddata,
 			  struct max_m5_data *m5_data)
 {
+	if (!ddata || !m5_data)
+		return -EINVAL;
+
 	if (ddata->design_capacity != m5_data->parameters.designcap)
 		ddata->design_capacity = m5_data->parameters.designcap;
 	if (ddata->ini_rcomp0 != m5_data->parameters.rcomp0)
@@ -771,6 +788,9 @@ int max_m5_save_state_data(struct max_m5_data *m5_data)
 	u16 learncfg;
 	int ret = 0;
 
+	if (!m5_data)
+		return -EINVAL;
+
 	/* Do not save when in RC1 stage b/213425610 */
 	ret = REGMAP_READ(m5_data->regmap, MAX_M5_LEARNCFG, &learncfg);
 	if (ret < 0)
@@ -834,6 +854,9 @@ int max_m5_model_check_state(struct max_m5_data *m5_data)
 	struct max_m5_custom_parameters *fg_param = &m5_data->parameters;
 	bool bad_residual;
 
+	if (!m5_data)
+		return -EINVAL;
+
 	if (fg_param->rcomp0 == 0xFF)
 		return -ERANGE;
 
@@ -858,6 +881,9 @@ int max_m5_model_read_state(struct max_m5_data *m5_data)
 {
 	int rc;
 	struct max17x0x_regmap *regmap = m5_data->regmap;
+
+	if (!m5_data)
+		return -EINVAL;
 
 	rc= REGMAP_READ(regmap, MAX_M5_RCOMP0, &m5_data->parameters.rcomp0);
 	if (rc == 0)
@@ -898,6 +924,9 @@ int max_m5_model_read_state(struct max_m5_data *m5_data)
 
 int max_m5_get_designcap(const struct max_m5_data *m5_data)
 {
+	if (!m5_data)
+		return -EINVAL;
+
 	return m5_data->parameters.designcap;
 }
 
@@ -963,6 +992,9 @@ int max_m5_model_state_sscan(struct max_m5_data *m5_data, const char *buf,
 			     int max)
 {
 	int ret, index, reg, val;
+
+	if (!m5_data)
+		return -EINVAL;
 
 	for (index = 0; index < max ; index += 1) {
 		ret = sscanf(&buf[index], "%x:%x", &reg, &val);
@@ -1110,6 +1142,9 @@ int max_m5_model_get_cap_lsb(const struct max_m5_data *m5_data)
 	struct max17x0x_regmap *regmap = m5_data->regmap;
 	int cap_lsb;
 
+	if (!m5_data)
+		return -EINVAL;
+
 	return max_m5_read_taskperiod(&cap_lsb, regmap) < 0 ? -1 : cap_lsb;
 }
 
@@ -1118,7 +1153,7 @@ int max_m5_fg_model_cstr(char *buf, int max, const struct max_m5_data *m5_data)
 {
 	int i, len;
 
-	if (!m5_data->custom_model || !m5_data->custom_model_size)
+	if (!m5_data || !m5_data->custom_model || !m5_data->custom_model_size)
 		return -EINVAL;
 
 	for (len = 0, i = 0; i < m5_data->custom_model_size; i += 1)
@@ -1131,7 +1166,8 @@ int max_m5_fg_model_cstr(char *buf, int max, const struct max_m5_data *m5_data)
 
 int max_m5_get_rc_switch_param(struct max_m5_data *m5_data, u16 *rc2_tempco, u16 *rc2_learncfg)
 {
-	if (m5_data->parameters.tempco <= 0 || m5_data->parameters.learncfg <= 0)
+
+	if (!m5_data || m5_data->parameters.tempco <= 0 || m5_data->parameters.learncfg <= 0)
 		return -EINVAL;
 
 	*rc2_tempco = m5_data->parameters.tempco;
@@ -1145,7 +1181,7 @@ int max_m5_fg_model_sscan(struct max_m5_data *m5_data, const char *buf, int max)
 {
 	int ret, index, reg, val, fg_model_end;
 
-	if (!m5_data->custom_model)
+	if (!m5_data || !m5_data->custom_model)
 		return -EINVAL;
 
 	/* use the default size */
@@ -1360,6 +1396,9 @@ int max_m5_check_recal_state(struct max_m5_data *m5_data, int algo, u16 eeprom_c
 	u16 learncfg, status, reg_cycle, dqacc, dpacc, new_cap;
 	int ret;
 
+	if (!m5_data)
+		return -EINVAL;
+
 	if (m5_data->recal.state == RE_CAL_STATE_IDLE)
 		return 0;
 
@@ -1442,11 +1481,17 @@ int max_m5_recalibration(struct max_m5_data *m5_data, int algo, u16 cap)
 
 int max_m5_recal_state(const struct max_m5_data *m5_data)
 {
+	if (!m5_data)
+		return 0;
+
 	return m5_data->recal.state;
 }
 
 int max_m5_recal_cycle(const struct max_m5_data *m5_data)
 {
+	if (!m5_data)
+		return 0;
+
 	return m5_data->recal.base_cycle_reg;
 }
 
@@ -1460,6 +1505,9 @@ int m5_init_custom_parameters(struct device *dev, struct max_m5_data *m5_data,
 	const int cnt_default = sizeof(*cp) / 2 - 1;
 	const int cnt_w_cgain = sizeof(*cp) / 2;
 	int ret, cnt;
+
+	if (!m5_data)
+		return -EINVAL;
 
 	memset(cp, 0, sizeof(*cp));
 
@@ -1486,7 +1534,8 @@ int m5_init_custom_parameters(struct device *dev, struct max_m5_data *m5_data,
 
 void max_m5_free_data(struct max_m5_data *m5_data)
 {
-	devm_kfree(m5_data->dev, m5_data);
+	if (m5_data)
+		devm_kfree(m5_data->dev, m5_data);
 }
 
 void *max_m5_init_data(struct device *dev, struct device_node *node,

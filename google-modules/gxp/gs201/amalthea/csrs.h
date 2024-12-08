@@ -8,6 +8,8 @@
 #ifndef __AMALTHEA_CSRS_H__
 #define __AMALTHEA_CSRS_H__
 
+#include <linux/bits.h>
+
 #define GXP_REG_DOORBELLS_SET_WRITEMASK 0x1
 #define GXP_REG_DOORBELLS_CLEAR_WRITEMASK 0x1
 
@@ -73,5 +75,9 @@ enum gxp_csrs {
 /* CMU offset */
 #define PLL_CON0_PLL_AUR 0x100
 #define PLL_CON0_NOC_USER 0x610
+
+/* Provino fabric CSR offsets and fields */
+#define FABRIC_IXBAR1_ARL_CTRL_OFFSET 0x1818
+#define FABRIC_IXBAR1_ARL_CTRL_EN BIT(31)
 
 #endif /* __AMALTHEA_CSRS_H__ */

@@ -91,6 +91,7 @@ enum gbms_tags {
 	GBMS_TAG_RS32 = 0x52533332,
 	GBMS_TAG_RSBM = 0x5253424d,
 	GBMS_TAG_RSBR = 0x52534252,
+	GBMS_TAG_RSOC = 0x52534F43, /* save soc */
 	GBMS_TAG_SUFG = 0x53554647, /* shutdown by user_request flag */
 
 	/* Reboot scratch */
@@ -109,7 +110,6 @@ enum gbms_tags {
 	GBMS_TAG_SNUM = 0x534e554d,
 
 	GBMS_TAG_STRD = 0x53545244, /* LOTRV1: Swelling data */
-	GBMS_TAG_RSOC = 0x52534F43,
 };
 
 /*

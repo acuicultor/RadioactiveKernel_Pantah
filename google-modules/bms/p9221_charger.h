@@ -719,6 +719,7 @@ struct p9221_charger_data {
 	struct gvotable_election	*csi_status_votable;
 	struct gvotable_election	*csi_type_votable;
 	struct gvotable_election	*point_full_ui_soc_votable;
+	struct gvotable_election	*fan_level_votable;
 	struct notifier_block		nb;
 	struct mutex			io_lock;
 	struct mutex			cmd_lock;
@@ -844,6 +845,7 @@ struct p9221_charger_data {
 	bool				hpp_hv;
 	int				fod_mode;
 	enum p9xxx_chk_rp		check_rp;
+	int				fan_last_level;
 
 #if IS_ENABLED(CONFIG_GPIOLIB)
 	struct gpio_chip gpio;

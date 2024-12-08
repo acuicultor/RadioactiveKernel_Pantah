@@ -32,18 +32,7 @@ gxp-objs += \
 		gxp-pm.o \
 		gxp-ssmt.o \
 		gxp-thermal.o \
-		gxp-vd.o \
-		gcip-alloc-helper.o \
-			   gcip-dma-fence.o \
-			   gcip-domain-pool.o \
-			   gcip-firmware.o \
-			   gcip-image-config.o \
-			   gcip-kci.o \
-			   gcip-mailbox.o \
-			   gcip-mem-pool.o \
-			   gcip-pm.o \
-			   gcip-telemetry.o \
-			   gcip-thermal.o
+		gxp-vd.o
 
 ifeq ($(GXP_CHIP),AMALTHEA)
 
@@ -57,13 +46,28 @@ EDGETPU_CHIP := janeiro
 
 endif
 
+ifeq ($(CONFIG_$(GXP_CHIP)),m)
 
+gxp-objs += \
+		$(GCIP_DIR)/gcip-alloc-helper.o \
+		$(GCIP_DIR)/gcip-dma-fence.o \
+		$(GCIP_DIR)/gcip-domain-pool.o \
+		$(GCIP_DIR)/gcip-firmware.o \
+		$(GCIP_DIR)/gcip-image-config.o \
+		$(GCIP_DIR)/gcip-kci.o \
+		$(GCIP_DIR)/gcip-mailbox.o \
+		$(GCIP_DIR)/gcip-mem-pool.o \
+		$(GCIP_DIR)/gcip-pm.o \
+		$(GCIP_DIR)/gcip-telemetry.o \
+		$(GCIP_DIR)/gcip-thermal.o
+
+endif
 
 KERNEL_SRC ?= /lib/modules/$(shell uname -r)/build
 M ?= $(shell pwd)
 
 # Obtain the current git commit hash for logging on probe
-GIT_PATH=$(shell cd $(KERNEL_SRC); readlink -e $(M))
+GIT_PATH=$(srctree)
 ifeq ($(shell git --git-dir=$(GIT_PATH)/.git rev-parse --is-inside-work-tree),true)
         GIT_REPO_STATE=$(shell (git --git-dir=$(GIT_PATH)/.git --work-tree=$(GIT_PATH) status --porcelain | grep -q .) && echo -dirty)
         ccflags-y       += -DGIT_REPO_TAG=\"$(shell git --git-dir=$(GIT_PATH)/.git rev-parse --short HEAD)$(GIT_REPO_STATE)\"
@@ -84,7 +88,7 @@ GXP_PLATFORM ?= SILICON
 gxp-flags := -DCONFIG_GXP_$(GXP_PLATFORM) -DCONFIG_$(GXP_CHIP)=1 \
 	     -I$(M)/include -I$(M)/gcip-kernel-driver/include \
 	     -I$(srctree)/$(M)/include \
-	     -I$(srctree)/$(M)/gcip-kernel-driver/include \
+	     -I$(srctree)/$(src)/gcip-kernel-driver/include \
 	     -I$(srctree)/drivers/gxp/include
 ccflags-y += $(EXTRA_CFLAGS) $(gxp-flags)
 

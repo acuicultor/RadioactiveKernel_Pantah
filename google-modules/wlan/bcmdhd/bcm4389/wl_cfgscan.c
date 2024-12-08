@@ -362,9 +362,10 @@ s32 wl_inform_single_bss(struct bcm_cfg80211 *cfg, wl_bss_info_v109_t *bi, bool 
 		return err;
 	}
 
-	if (bi->length < (bi->ie_offset + bi->ie_length)) {
-		WL_ERR(("IE length is not Valid. IE offse:%d, len:%d\n",
-			bi->ie_offset, bi->ie_length));
+	if ((bi->length < bi->ie_length) || (bi->length < bi->ie_offset) ||
+		(bi->length < (bi->ie_offset + bi->ie_length))) {
+		WL_ERR(("IE length is not Valid. ie_offset %d, ie_length %d, length %d\n",
+		bi->ie_offset, bi->ie_length, bi->length));
 		return -EINVAL;
 	}
 

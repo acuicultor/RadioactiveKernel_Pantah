@@ -26,8 +26,6 @@
 #define BATT_EEPROM_TAG_BRID_LEN	1
 #define BATT_EEPROM_TAG_STRD_OFFSET	0x1E
 #define BATT_EEPROM_TAG_STRD_LEN	12
-#define BATT_EEPROM_TAG_RSOC_OFFSET	0x2A
-#define BATT_EEPROM_TAG_RSOC_LEN	2
 #define BATT_EEPROM_TAG_ACIM_OFFSET	0x2C
 #define BATT_EEPROM_TAG_ACIM_LEN	2
 #define BATT_EEPROM_TAG_BCNT_OFFSET	0x2E
@@ -127,10 +125,6 @@ int gbee_storage_info(gbms_tag_t tag, size_t *addr, size_t *count, void *ptr)
 		*addr = BATT_EEPROM_TAG_STRD_OFFSET;
 		*count = BATT_EEPROM_TAG_STRD_LEN;
 		break;
-	case GBMS_TAG_RSOC:
-		*addr = BATT_EEPROM_TAG_RSOC_OFFSET;
-		*count = BATT_EEPROM_TAG_RSOC_LEN;
-		break;
 	case GBMS_TAG_ACIM:
 		*addr = BATT_EEPROM_TAG_ACIM_OFFSET;
 		*count = BATT_EEPROM_TAG_ACIM_LEN;
@@ -175,11 +169,10 @@ static int gbee_storage_iter(int index, gbms_tag_t *tag, void *ptr)
 					   GBMS_TAG_GMSR, GBMS_TAG_BCNT,
 					   GBMS_TAG_CNHS, GBMS_TAG_SELC,
 					   GBMS_TAG_CELC, GBMS_TAG_LOTR,
-					   GBMS_TAG_STRD, GBMS_TAG_RSOC,
-					   GBMS_TAG_ACIM, GBMS_TAG_GCFE,
-					   GBMS_TAG_RAVG, GBMS_TAG_RFCN,
-					   GBMS_TAG_THAS, GBMS_TAG_AYMD,
-					   GBMS_TAG_MYMD};
+					   GBMS_TAG_STRD, GBMS_TAG_ACIM,
+					   GBMS_TAG_GCFE, GBMS_TAG_RAVG,
+					   GBMS_TAG_RFCN, GBMS_TAG_THAS,
+					   GBMS_TAG_AYMD, GBMS_TAG_MYMD};
 	const int count = ARRAY_SIZE(keys);
 
 	if (index < 0 || index >= count)
@@ -236,7 +229,6 @@ static bool gbee_storage_is_writable(gbms_tag_t tag)
 	case GBMS_TAG_CELC:
 	case GBMS_TAG_BPST:
 	case GBMS_TAG_STRD:
-	case GBMS_TAG_RSOC:
 	case GBMS_TAG_ACIM:
 	case GBMS_TAG_GCFE:
 	case GBMS_TAG_RAVG:
