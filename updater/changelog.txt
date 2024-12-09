@@ -1,27 +1,6 @@
-Project name: RadioactiveKernel_Pantah-v3.0.4
+Project name: RadioactiveKernel_Pantah-v3.0.6
   * update build version (acuicultor) 
-  * KSU: update to to v1.0.2 (acuicultor) [bbb77e63bf5ef]
-  * defconfig regenerate (acuicultor) [7ce89cc20e204]
-  * sched/completion: Expose wait_for_common*() to drivers (Sultan Alsawaf) [fa64e2a7dba5d]
-  * drm: samsung: Disable heavy DMA debug IRQs (Sultan Alsawaf) [a46b346cf317d]
-  * cpumask: Add optimized helpers when NR_CPUS fits in a long (Sultan Alsawaf) [381e34d0a9968]
-  * mali_kbase: Disable CONFIG_MALI_GATOR_SUPPORT (Sultan Alsawaf) [202e3a65fbd6a]
-  * mali_kbase: Allow worker kthread to run on any CPU (Sultan Alsawaf) [a710f4b88c3ca]
-  * drm: Convert CPU-invariant uninterruptible wait to TASK_IDLE (Sultan Alsawaf) [2a272968df57e]
-  * drm: samsung: Use idle usleep in decon_wait_earliest_process_time() (Sultan Alsawaf) [ea5baad52ac9d]
-  * drm: samsung: Don't contribute to load avg when waiting for flip_done (Sultan Alsawaf) [79e220dffa42f]
-  * eh: Simplify compression thread by removing statistics tracking (Sultan Alsawaf) [9a4c03f5c62a3]
-  * eh: Make the sw_fifo emptiness check lockless (Sultan Alsawaf) [0d567400c9cb6]
-  * eh: Increase hardware fifo size to 4096 pages (Sultan Alsawaf) [6e65ddd064fb0]
-  * eh: Use real-time priority for the compression thread (Sultan Alsawaf) [691c596642731]
-  * eh: Use interrupts to wait for compression completion (Sultan Alsawaf) [78b00fb5257d2]
-  * eh: Make the compression thread more efficient (Sultan Alsawaf) [66757d63701d8]
-  * eh: Reduce unnecessary wake ups for the compression thread (Sultan Alsawaf) [18ced6e24a026]
-  * eh: Use interrupts to wait for decompression completion on RT (Sultan Alsawaf) [e95b9e9183c5e]
-  * eh: Overhaul software fifo queue to take unlimited requests (Sultan Alsawaf) [931d39b28a617]
-  * drm: samsung: Mute display brightness change log spam (Sultan Alsawaf) [06e8922a1368b]
-  * Revert "bbdpl: Optimize IRQ handler for RT" (acuicultor) [c7e72e357e01c]
-  * Merge remote-tracking branch 'android-gs-raviole-5.10-android14-qpr3/android-gs-pantah-5.10-android15' into A15-stable
-
+  * google-modules: Merge tag 'android-15.0.0_r0.32' into A15-stable (acuicultor) [584a590def16f]
+  * Merge tag 'android-15.0.0_r0.32' into A15-stable (acuicultor) 
 
 
