@@ -1390,6 +1390,7 @@ struct task_struct {
 	ANDROID_KABI_RESERVE(6);
 	ANDROID_KABI_RESERVE(7);
 	ANDROID_KABI_RESERVE(8);
+	u64 android_kabi_reserved8;
 
 	/*
 	 * New fields for task_struct should be added above here, so that
