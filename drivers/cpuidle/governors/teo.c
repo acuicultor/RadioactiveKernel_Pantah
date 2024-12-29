@@ -500,13 +500,6 @@ out_tick:
 	return idx;
 }
 
-s64 teo_wfi_timeout_ns(void)
-{
-	struct teo_cpu *cpu_data = this_cpu_ptr(&teo_cpus);
-
-	return cpu_data->wfi_timeout_ns;
-}
-
 /**
  * teo_reflect - Note that governor data for the CPU need to be updated.
  * @dev: Target CPU.
@@ -530,10 +523,6 @@ static void teo_reflect(struct cpuidle_device *dev, int state)
 		cpu_data->time_span_ns = local_clock() - cpu_data->time_span_ns;
 	}
 }
-
-static int UTIL_THRESHOLD_SHIFT = 6;
-module_param(UTIL_THRESHOLD_SHIFT, int, 0644);
-
 
 /**
  * teo_enable_device - Initialize the governor's data for the target CPU.
