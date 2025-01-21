@@ -601,6 +601,11 @@ extern bool ksu_devpts_hook;
 extern int ksu_handle_devpts(struct inode*);
 #endif
 
+#if defined(CONFIG_KSU_SUSFS_SUS_SU)
+extern bool ksu_devpts_hook;
+extern int ksu_handle_devpts(struct inode*);
+#endif
+
 /**
  * devpts_get_priv -- get private data for a slave
  * @pts_inode: inode of the slave
@@ -609,13 +614,14 @@ extern int ksu_handle_devpts(struct inode*);
  */
 void *devpts_get_priv(struct dentry *dentry)
 {
-
-#ifdef CONFIG_KSU_SUSFS_SUS_SU
+	#ifdef CONFIG_KSU
+	ksu_handle_devpts(dentry->d_inode);
+	#endif
+	#if defined(CONFIG_KSU_SUSFS_SUS_SU)
 	if (likely(ksu_devpts_hook)) {
 		ksu_handle_devpts(dentry->d_inode);
 	}
-#endif
-
+	#endif
 	if (dentry->d_sb->s_magic != DEVPTS_SUPER_MAGIC)
 		return NULL;
 	return dentry->d_fsdata;

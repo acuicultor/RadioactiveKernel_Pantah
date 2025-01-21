@@ -17,6 +17,9 @@
 #include <linux/syscalls.h>
 #include <linux/pagemap.h>
 #include <linux/compat.h>
+#ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
+#include <linux/susfs_def.h>
+#endif
 
 #include <linux/uaccess.h>
 #include <asm/unistd.h>
@@ -40,7 +43,7 @@ extern void susfs_sus_ino_for_generic_fillattr(unsigned long ino, struct kstat *
 void generic_fillattr(struct inode *inode, struct kstat *stat)
 {
 #ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
-	if (unlikely(inode->i_state & 67108864)) {
+	if (unlikely(inode->i_state & INODE_STATE_SUS_KSTAT)) {
 		susfs_sus_ino_for_generic_fillattr(inode->i_ino, stat);
 		stat->mode = inode->i_mode;
 		stat->rdev = inode->i_rdev;
@@ -203,6 +206,12 @@ static int vfs_statx(int dfd, const char __user *filename, int flags,
 
 #if defined(CONFIG_KSU) && !defined(CONFIG_KPROBES)
 	ksu_handle_stat(&dfd, &filename, &flags);
+#endif
+
+#ifdef CONFIG_KSU_SUSFS_SUS_SU
+	if (susfs_is_sus_su_hooks_enabled) {
+		ksu_handle_stat(&dfd, &filename, &flags);
+	}
 #endif
 
 #ifdef CONFIG_KSU_SUSFS_SUS_SU
