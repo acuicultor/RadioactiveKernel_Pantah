@@ -166,6 +166,15 @@ config KSU_SUSFS_SUS_SU
                 the same as the su implementaion of non-gki kernel without kprobe supported.
       - Only apps with root access granted by ksu manager are allowed to get root.
 
+config KSU_MANUAL_HOOK
+	bool "Manual hooking without kprobes"
+	depends on KSU && KSU != m
+	depends on KPROBES
+	default n
+	help
+	  Keep KPROBES enabled but do not use KPROBES to implement
+	  the hooks required by KernelSU, but instead hook them manually.
+
 endmenu
 
 endmenu
