@@ -154,6 +154,15 @@ config KSU_SUSFS_OPEN_REDIRECT
       - Effective only on processes with uid < 2000.
       - Please be reminded that process with open access to the target and redirected path can be detected.
 
+config KSU_MANUAL_HOOK
+	bool "Manual hooking without kprobes"
+	depends on KSU && KSU != m
+	depends on KPROBES
+	default n
+	help
+	  Keep KPROBES enabled but do not use KPROBES to implement
+	  the hooks required by KernelSU, but instead hook them manually.
+
 endmenu
 
 endmenu
