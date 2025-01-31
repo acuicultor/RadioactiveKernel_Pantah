@@ -76,16 +76,6 @@ void ksu_android_ns_fs_check()
 	task_unlock(current);
 }
 
-int ksu_access_ok(const void *addr, unsigned long size) {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5,0,0)
-    /* For kernels before 5.0.0, pass the type argument to access_ok. */
-    return access_ok(VERIFY_READ, addr, size);
-#else
-    /* For kernels 5.0.0 and later, ignore the type argument. */
-    return access_ok(addr, size);
-#endif
-}
-
 struct file *ksu_filp_open_compat(const char *filename, int flags, umode_t mode)
 {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0) || defined(CONFIG_IS_HW_HISI) || defined(CONFIG_KSU_ALLOWLIST_WORKAROUND)
@@ -117,7 +107,7 @@ struct file *ksu_filp_open_compat(const char *filename, int flags, umode_t mode)
 ssize_t ksu_kernel_read_compat(struct file *p, void *buf, size_t count,
 			       loff_t *pos)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0) || defined(KSU_KERNEL_READ)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0)
 	return kernel_read(p, buf, count, pos);
 #else
 	loff_t offset = pos ? *pos : 0;
@@ -132,7 +122,7 @@ ssize_t ksu_kernel_read_compat(struct file *p, void *buf, size_t count,
 ssize_t ksu_kernel_write_compat(struct file *p, const void *buf, size_t count,
 				loff_t *pos)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0) || defined(KSU_KERNEL_WRITE)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0)
 	return kernel_write(p, buf, count, pos);
 #else
 	loff_t offset = pos ? *pos : 0;
@@ -144,7 +134,7 @@ ssize_t ksu_kernel_write_compat(struct file *p, const void *buf, size_t count,
 #endif
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 8, 0) || defined(KSU_STRNCPY_FROM_USER_NOFAULT)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 8, 0)
 long ksu_strncpy_from_user_nofault(char *dst, const void __user *unsafe_addr,
 				   long count)
 {
