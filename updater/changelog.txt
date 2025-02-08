@@ -1,6 +1,31 @@
-Project name: RadioactiveKernel_Pantah-v3.0.6
+Project name: RadioactiveKernel_Pantah-v3.1.2
   * update build version (acuicultor) 
-  * google-modules: Merge tag 'android-15.0.0_r0.32' into A15-stable (acuicultor) [584a590def16f]
-  * Merge tag 'android-15.0.0_r0.32' into A15-stable (acuicultor) 
+  * exynos-bts: Convert btsdev->mutex_lock into an rt_mutex lock (Sultan Alsawaf) [a2cdbd0c3c9d3]
+  * KSU: update to to v1.0.3 (acuicultor) [d2f39c14636a8]
+  * defconfig regenerate (acuicultor) [98769808e6ee2]
+  * Revert "arm64: Add a timer to cpu_do_idle() to avoid staying in WFI too long" (acuicultor) [8974548733a58]
+  * Revert "sched: vh: Add a new knob to modify teo util_threshold" (acuicultor) [5e195e4d50846]
+  * android_kabi: Don't carve out ABI reservations in various structs (Sultan Alsawaf) [0402c9ea7841b]
+  * cpuidle: teo: Don't count non-existent intercepts (Christian Loehle) [b63b209238d71]
+  * cpuidle: teo: remove leftovers (acuicultor) [9755ecb1694b0]
+  * cpuidle: teo: Remove recent intercepts metric (Christian Loehle) [f81a81bc20e87]
+  * cpuidle: teo: Avoid unnecessary variable assignments (Rafael J. Wysocki) [ff698b596d10f]
+  * cpuidle: teo: Gather statistics regarding whether or not to stop the tick (Rafael J. Wysocki) [d9986abf82afe]
+  * cpuidle: teo: Skip tick_nohz_get_sleep_length() call in some cases (Rafael J. Wysocki) [8a9c6c30ba0d4]
+  * cpuidle: teo: Do not call tick_nohz_get_sleep_length() upfront (Rafael J. Wysocki) [5e1e38726ec74]
+  * cpuidle: teo: Avoid stopping the tick unnecessarily when bailing out (Rafael J. Wysocki) [3353b5218b426]
+  * Revert "UPSTREAM: cpuidle: teo: Optionally skip polling states in teo_find_shallower_state()" (Sultan Alsawaf) [ff8293755a0e7]
+  * Revert "BACKPORT: cpuidle: teo: Introduce util-awareness" (Sultan Alsawaf) [a8157df0f6559]
+  * Revert "ANDROID: teo: Extend ifdef protection for accessing sched_cpu_util" (Sultan Alsawaf) [b797467bf4e6d]
+  * Revert "ANDROID: cpuidle: teo: Export a function that allows modifying util_threshold" (Sultan Alsawaf) [28f15dfea8672]
+  * Revert "UPSTREAM: cpuidle: teo: Update idle duration estimate when choosing shallower state" (Sultan Alsawaf) [51abcd64bf602]
+  * sched/fair: Use all little CPUs for CPU-bound workloads (Pierre Gondois) [bd32fd97f5add]
+  * media: mfc: Fix HDR10+ decode memory leak (Sultan Alsawaf) [76a8b32b65658]
+  * GPUCORE-43479 Using Upstream For MT Unmapped Area Topdown-Search (Vamsidhar reddy Gaddam) [a2d0128149ce1]
+  * soc/google/cpif: Don't pin workers onto CPU2 (Sultan Alsawaf) [b91d5005c1dd0]
+  * sbalance: Fix severe misattribution of movable IRQs to the last active CPU (Sultan Alsawaf) [4367800419a29]
+  * sbalance: Don't race with CPU hotplug (Sultan Alsawaf) [122ce713fe414]
+  * sbalance: Convert various IRQ counter types to unsigned ints (Sultan Alsawaf) [30dc00bd64d06]
+  * Merge tag 'android-15.0.0_r0.52' into A15-stable (acuicultor) 
 
 
