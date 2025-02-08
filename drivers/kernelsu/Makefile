@@ -20,14 +20,14 @@ obj-$(CONFIG_KSU) += kernelsu.o
 # ifeq ($(shell test -e $(srctree)/$(src)/../.git; echo $$?),0)
 # $(shell cd $(srctree)/$(src); /usr/bin/env PATH="$$PATH":/usr/bin:/usr/local/bin [ -f ../.git/shallow ] && git fetch --unshallow)
 # KSU_GIT_VERSION := $(shell cd $(srctree)/$(src); /usr/bin/env PATH="$$PATH":/usr/bin:/usr/local/bin git rev-list --count HEAD)
-KSU_GIT_VERSION := 1786
+# KSU_GIT_VERSION := 1786
 # ksu_version: major * 10000 + git version + 200 for historical reasons
-$(eval KSU_VERSION=$(shell expr 10000 + $(KSU_GIT_VERSION) + 200))
-$(info -- KernelSU version: $(KSU_VERSION))
-ccflags-y += -DKSU_VERSION=$(KSU_VERSION)
+# $(eval KSU_VERSION=$(shell expr 10000 + $(KSU_GIT_VERSION) + 200))
+# $(info -- KernelSU version: $(KSU_VERSION))
+# ccflags-y += -DKSU_VERSION=$(KSU_VERSION)
 # else # If there is no .git file, the default version will be passed.
 # $(warning "KSU_GIT_VERSION not defined! It is better to make KernelSU a git submodule!")
-# ccflags-y += -DKSU_VERSION=16
+ccflags-y += -DKSU_VERSION=12018
 # endif
 
 ifndef KSU_EXPECTED_SIZE
